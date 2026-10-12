@@ -1,0 +1,18 @@
+node_modules
+/out/
+/dist/
+/release/
+/coverage/
+playwright-report
+test-results
+.DS_Store
+.env
+.env.*
+.prime-gui.log
+.superdesign/
+.claude/worktrees/
+__pycache__/
+.claude/settings.local.json
+
+# bulk scratch/research data (Zed git-checkpoint pipe deadlock guard, 2026-10-12)
+tmp/
