@@ -1,0 +1,6 @@
+{
+  "id": "catfish-pi",
+  "displayName": "Catfish-Pi",
+  "description": "A friendly purple jelly pet shaped like the mathematical pi symbol.",
+  "spritesheetPath": "spritesheet.webp"
+}

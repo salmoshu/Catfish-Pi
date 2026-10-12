@@ -1,0 +1,44 @@
+# NOTICE — Provenance and third-party credits
+
+## Origin
+
+Catfish-Pi is derived from **GooeyPi** — https://github.com/am-will/gooey-pi
+(MIT License, © GooeyPi contributors). The initial codebase was taken from the
+GooeyPi v1.1.15 snapshot (2026-09-02) and renamed. The upstream copyright
+notice is preserved in `LICENSE` alongside the Catfish-Pi copyright.
+
+The vendored Prime Agent artifacts under `vendor/` keep their upstream
+`0.7.0-gooeypi.1` version strings: those patch releases were produced and are
+documented by the GooeyPi project (see `vendor/prime-agent-0.7.0-gooeypi.1.md`
+and `vendor/prime-agent-ai-0.7.0-gooeypi.1.md`).
+
+## Design borrowing from the OMP/Pi desktop ecosystem
+
+Catfish-Pi's initial code absorbs advantages identified in a source-level
+survey of sibling community projects (research dated 2026-10-11). Credits:
+
+| Project | What Catfish-Pi takes | Status |
+|---|---|---|
+| [apoc/omp-desktop](https://github.com/apoc/omp-desktop) (MIT) | Minimum harness version floor that refuses outdated agents with an explicit update command, instead of failing as silent protocol drift | **Implemented** (`electron/main/harness-version.ts`, `docs/harness-discovery.md`) |
+| [GooeyPi](https://github.com/am-will/gooey-pi) (MIT) | Entire base: four-layer multi-harness abstraction, OMP `negotiate_protocol` v2 handshake with `rpc_chunk` reassembly, omp/pi event normalization, 256-byte title-slot session readers, MCP settings-lock writer, capability extension injection | Base code |
+| [oh-my-pi-gui](https://github.com/nornzach/oh-my-pi-gui) (MIT) | Bundled agent sidecar packaging (`bun --compile` + `extraResources` + runtime resolution) as the distribution reference | Reference |
+| [ompweb](https://github.com/nguyencanhtrung/ompweb) | RPC v2 frame/chunk bounds (1 MiB frames, 64 MiB reassembly) and session-JSONL race-avoidance patterns; equivalent defenses already exist in the GooeyPi base | Cross-checked |
+| [Pi Desktop](https://github.com/FaqFirebase/pi-desktop) (Apache-2.0) | omp/pi protocol difference checklist (event spellings, `get_fork_messages` absence, `models.yml`) used as adapter assertions | Reference |
+| [jeffscottward/omp-web](https://github.com/jeffscottward/omp-web) | `omp acp` / ACP v1 integration quality reference | Reference |
+| [oh-my-pi-desktop](https://github.com/dylansantwani/oh-my-pi-desktop) (MIT) | Crash-recovery pattern (backoff + generation guard + two-phase kill) | Reference |
+
+"Reference" means the idea informed Catfish-Pi's design without copying code;
+the named projects' licenses govern their own code.
+
+## Bundled third-party assets
+
+- The OMP pi-plug mark (`assets/brand/omp-icon.svg`) is sourced from the
+  MIT-licensed oh-my-pi repository (`can1357/oh-my-pi`, © Mario Zechner and
+  Can Bölük).
+- The Vazirmatn font subset (`public/fonts/`) is © Saber Rastikerdar, SIL Open
+  Font License 1.1; see `public/fonts/LICENSE-vazirmatn.txt` and
+  `docs/reference-sources.md`.
+- The Prime Intellect butterfly mark is sourced from the MIT-licensed Prime
+  Agent repository (`PrimeIntellect-ai/prime-agent`).
+- Application icons and the Catfish-Pi mascot artwork are provisional assets
+  carried over from the GooeyPi snapshot pending original Catfish-Pi artwork.
