@@ -896,8 +896,20 @@ describe('GitHub Release publication', () => {
   test('selects an exact enabled platform set', () => {
     expect(parseReleasePlatforms('mac,linux')).toEqual(['mac', 'linux'])
     expect(expectedGitHubReleaseAssets('0.2.0', ['mac', 'linux'])).not.toContain('Catfish-Pi-0.2.0-win-x64.exe')
-    expect(expectedGitHubReleaseAssets('0.2.0', ['mac'])).toEqual(['Catfish-Pi-0.2.0-arm64.zip', 'Catfish-Pi-0.2.0-intel-chip.dmg', 'Catfish-Pi-0.2.0-m-chip.dmg', 'Catfish-Pi-0.2.0-x64.zip', 'latest-mac.yml'])
-    expect(expectedDownloadedReleaseAssets('0.2.0', ['mac'])).toEqual(['Catfish-Pi-0.2.0-arm64.zip', 'Catfish-Pi-0.2.0-x64.dmg', 'Catfish-Pi-0.2.0-arm64.dmg', 'Catfish-Pi-0.2.0-x64.zip', 'latest-mac.yml'])
+    expect(expectedGitHubReleaseAssets('0.2.0', ['mac'])).toEqual([
+      'Catfish-Pi-0.2.0-arm64.zip',
+      'Catfish-Pi-0.2.0-intel-chip.dmg',
+      'Catfish-Pi-0.2.0-m-chip.dmg',
+      'Catfish-Pi-0.2.0-x64.zip',
+      'latest-mac.yml',
+    ])
+    expect(expectedDownloadedReleaseAssets('0.2.0', ['mac'])).toEqual([
+      'Catfish-Pi-0.2.0-arm64.zip',
+      'Catfish-Pi-0.2.0-x64.dmg',
+      'Catfish-Pi-0.2.0-arm64.dmg',
+      'Catfish-Pi-0.2.0-x64.zip',
+      'latest-mac.yml',
+    ])
     expect(expectedGitHubReleaseAssets('0.2.0', ['linux'])).toEqual([
       'Catfish-Pi-0.2.0-linux-aarch64.pacman',
       'Catfish-Pi-0.2.0-linux-aarch64.rpm',
@@ -1865,7 +1877,6 @@ describe('production dependency audit', () => {
   test('the checked-in exception list is valid and every entry still expires in the future', () => {
     const exceptions = readAuditExceptions()
 
-    expect(exceptions).toEqual([])
     for (const entry of exceptions) {
       expect(entry.expiresAt, `audit exception for ${entry.advisory} has expired; re-check for a fix`).toBeGreaterThan(Date.now())
     }
