@@ -6,26 +6,26 @@ See the [source setup](README.md#run-from-source) and
 ## Local macOS development without release credentials
 
 You do not need access to the signing and notarization credentials for the
-production `app.catfishpi.desktop` bundle. Use `npm run dev` while developing and
+production `app.catfishpi.desktop` bundle. Use `pnpm run dev` while developing and
 run the relevant checks from the validation guide before submitting a change.
 
 To exercise the normal local packaging pipeline without release credentials,
 run:
 
 ```bash
-npm run package:mac:local-qa
+pnpm run package:mac:local-qa
 ```
 
 This creates unsigned, unnotarized local-QA artifacts. It does not establish
-that a build is ready for public distribution; `npm run package:mac` is reserved
+that a build is ready for public distribution; `pnpm run package:mac` is reserved
 for maintainers with the release credentials.
 
 As an optional development convenience, use a separate app identity and
 Electron data directory when keeping a local package alongside Catfish-Pi:
 
 ```bash
-npm run build
-npx electron-builder --mac dir --arm64 --publish never \
+pnpm run build
+pnpm exec electron-builder --mac dir --arm64 --publish never \
   --config.mac.identity=null \
   --config.mac.notarize=false \
   --config.productName="Catfish-Pi Dev" \

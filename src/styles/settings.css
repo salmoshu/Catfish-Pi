@@ -1,12 +1,5 @@
 /* Settings */
-.settings-page { height: 100%; display: grid; grid-template-columns: 190px minmax(0, 1fr); }
-.settings-nav { padding: 20px 10px; border-right: 1px solid var(--border); background: var(--surface-subtle); }
-.settings-nav button { width: 100%; height: 33px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: 7px; color: var(--text-secondary); background: transparent; text-align: left; }
-.settings-nav button:hover, .settings-nav button.is-active { color: var(--text); background: var(--surface-hover); }
-.settings-nav__close { margin-bottom: 12px; }
-.settings-nav button span { flex: 1; }
-.settings-nav button > svg:last-child { opacity: 0; }
-.settings-nav button.is-active > svg:last-child { opacity: 1; color: var(--text-tertiary); }
+.settings-page { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr); }
 .settings-content { overflow: auto; }
 .settings-content__inner { width: min(100%, 720px); margin: 0 auto; padding: 36px 32px 70px; }
 .settings-content header { margin-bottom: 28px; }
@@ -117,7 +110,6 @@
 .shortcut-choice { display: flex !important; flex-direction: row !important; gap: 4px; flex: 0 0 auto; }
 .shortcut-choice .button.is-active { color: var(--text); border-color: var(--prime); background: var(--surface-selected); }
 .about-card { display: flex; align-items: center; gap: 12px; margin-bottom: 30px; }
-.about-card .prime-mark { box-shadow: 0 3px 10px rgba(0,0,0,.18), inset 0 0 0 1px rgba(255,255,255,.03); }
 .catfishpi-mark { display: inline-grid; flex: 0 0 auto; place-items: center; overflow: hidden; border-radius: 24%; }
 .catfishpi-mark img { width: 100%; height: 100%; display: block; object-fit: contain; }
 .about-card h2 { margin: 0; font-size: 15px; font-weight: 560; }

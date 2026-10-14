@@ -41,7 +41,7 @@ function setup() {
   const root = join(dataDir, 'project')
   dirs.push(dataDir)
   const store = new JsonStateStore(join(dataDir, 'state.json'))
-  const service = new ProjectService(store, () => null)
+  const service = new ProjectService(store, () => null, 'pi')
   return { dataDir, root, service, store }
 }
 
@@ -50,7 +50,7 @@ async function authorizeNarrowProject(root: string, service: ProjectService, sto
   const canonical = realpathSync(root)
   const now = new Date().toISOString()
   await store.update((state) => { state.projects.push({
-    id: 'narrow-project', harness: 'prime', name: 'Narrow project', path: canonical, folders: [canonical], primaryFolder: canonical,
+    id: 'narrow-project', harness: 'pi', name: 'Narrow project', path: canonical, folders: [canonical], primaryFolder: canonical,
     pinned: false, createdAt: now, lastOpenedAt: now, folderIdentities: { [canonical]: folderIdentity(canonical) },
   }) })
   await service.list()

@@ -38,11 +38,11 @@ async function setup() {
   const store = new JsonStateStore(join(dir, 'state.json'))
   const now = new Date().toISOString()
   await store.update((state) => { state.projects.push({
-    id: 'project', harness: 'prime', name: 'Project', path: canonical, folders: [canonical], primaryFolder: canonical,
+    id: 'project', harness: 'pi', name: 'Project', path: canonical, folders: [canonical], primaryFolder: canonical,
     pinned: false, createdAt: now, lastOpenedAt: now,
     folderIdentities: { [canonical]: { dev: info.dev.toString(), ino: info.ino.toString(), birthtimeNs: info.birthtimeNs.toString() } },
   }) })
-  const projects = new ProjectService(store, () => null)
+  const projects = new ProjectService(store, () => null, 'pi')
   const git = new GitService(async (cwd) => cwd)
   projects.bindProviders({ sessions: async () => [], branch: (cwd) => git.branch(cwd) })
   await projects.list()
@@ -72,7 +72,7 @@ describe('CheckoutService', () => {
     expect(runGit(root, 'branch', '--show-current')).toBe(initial)
     rmSync(join(root, 'untracked.txt'))
 
-    const lease = await gate.beginWorkspaceUse(root, { kind: 'agent', harness: 'prime', runtimeId: 'runtime' })
+    const lease = await gate.beginWorkspaceUse(root, { kind: 'agent', harness: 'pi', runtimeId: 'runtime' })
     await expect(service.execute('project', { strategy: 'branch', operation: 'switch', branch: 'feature/local' })).resolves.toMatchObject({ kind: 'refused', code: 'active-work' })
     expect(runGit(root, 'branch', '--show-current')).toBe(initial)
     lease.release()

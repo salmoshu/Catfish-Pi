@@ -5,16 +5,21 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AgentRpcManager, OMP_RPC_ADAPTER, PI_RPC_ADAPTER, PRIME_RPC_ADAPTER } from '../../electron/main/agent-rpc'
+import { AgentRpcManager, OMP_RPC_ADAPTER, PI_RPC_ADAPTER, type ProviderCatalog } from '../../electron/main/agent-rpc'
 import { validateRpcCommand } from '../../electron/main/agent-rpc/command-schema'
 import { MAX_RPC_WRITE_FRAME_BYTES, rpcRequestFrameBytes } from '../../electron/main/agent-rpc/limits'
 import { RpcRuntime } from '../../electron/main/agent-rpc/runtime'
 import { FramedRpcTransport } from '../../electron/main/agent-rpc/transport'
 import type { RpcObject } from '../../electron/main/agent-rpc/types'
-import { PrimeProviderService } from '../../electron/main/providers'
 import { RepositoryUseGate } from '../../electron/main/repository-use-gate'
-import type { RuntimeInfo } from '../../src/types/api'
+import type { PrimeModelDescriptor, RuntimeInfo } from '../../src/types/api'
 import { waitUntil } from '../helpers/wait'
+
+/** Manager cases that never consult the provider catalog; fails loudly if that changes. */
+const noProviders: ProviderCatalog = {
+  requireAvailableModel: async () => { throw new Error('provider catalog not used in this test') },
+  capabilities: async () => undefined,
+}
 
 const dirs: string[] = []
 const managers: AgentRpcManager[] = []
@@ -39,7 +44,7 @@ ${body}
   it('includes a sanitized stderr tail when the agent exits before any frame', async () => {
     const fake = writeExitingAgent(`process.stderr.write('Error: Tool "session_list" from extension "pi-session-search" conflicts with extension "omp-work-collaboration"')
 process.exit(1)`)
-    const runtime = new RpcRuntime(fake.executable, [], fake.cwd, () => undefined, () => undefined)
+    const runtime = new RpcRuntime(fake.executable, [], fake.cwd, () => undefined, () => undefined, {}, {}, PI_RPC_ADAPTER)
     try {
       await expect(runtime.handshake()).rejects.toThrow(/RPC exited \(1\): Error: Tool "session_list"/)
     } finally {
@@ -50,7 +55,7 @@ process.exit(1)`)
   it('redacts secrets and bounds the early exit message', async () => {
     const fake = writeExitingAgent(`process.stderr.write('\\u001b[31mtoken ghp_' + 'a'.repeat(40) + ' leaked\\u001b[0m\\n' + 'x'.repeat(5000) + '\\n' + 'final line ' + 'B'.repeat(300))
 process.exit(1)`)
-    const runtime = new RpcRuntime(fake.executable, [], fake.cwd, () => undefined, () => undefined)
+    const runtime = new RpcRuntime(fake.executable, [], fake.cwd, () => undefined, () => undefined, {}, {}, PI_RPC_ADAPTER)
     try {
       await expect(runtime.handshake()).rejects.toSatisfy((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
@@ -72,13 +77,13 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     process.exit(1)
   }
 })`)
-    const runtime = new RpcRuntime(fake.executable, [], fake.cwd, () => undefined, () => undefined)
+    const runtime = new RpcRuntime(fake.executable, [], fake.cwd, () => undefined, () => undefined, {}, {}, PI_RPC_ADAPTER)
     try {
       await runtime.handshake()
       const request = (runtime as unknown as { request(command: RpcObject, timeoutMs: number): Promise<RpcObject> }).request.bind(runtime)
       const error = await request({ type: 'trigger_exit' }, 10_000).catch((reason: unknown) => reason)
       expect(error).toBeInstanceOf(Error)
-      expect((error as Error).message).toBe('Prime Agent RPC exited (1)')
+      expect((error as Error).message).toBe('Pi RPC exited (1)')
     } finally {
       await runtime.stop()
     }
@@ -122,7 +127,7 @@ input.on('close', () => {
 }
 
 function managerFor(executable: string): AgentRpcManager {
-  const manager = new AgentRpcManager(executable, async (cwd) => cwd, async (path) => path)
+  const manager = new AgentRpcManager(executable, async (cwd) => cwd, async (path) => path, noProviders, () => new Set(), PI_RPC_ADAPTER)
   managers.push(manager)
   return manager
 }
@@ -140,7 +145,7 @@ describe('agent RPC command frame bounds', () => {
     manager.setWorkspaceUseProvider(begin)
 
     const runtime = await manager.start({ cwd: fake.cwd })
-    expect(begin).toHaveBeenCalledWith(fake.cwd, expect.objectContaining({ kind: 'agent', harness: 'prime' }), expect.any(Function))
+    expect(begin).toHaveBeenCalledWith(fake.cwd, expect.objectContaining({ kind: 'agent', harness: 'pi' }), expect.any(Function))
     expect(release).not.toHaveBeenCalled()
 
     await manager.stop(runtime.runtimeId)
@@ -239,7 +244,6 @@ describe('agent RPC command frame bounds', () => {
   })
 
   it.each([
-    ['prime', PRIME_RPC_ADAPTER, '/mcp login notion'],
     ['omp', OMP_RPC_ADAPTER, '/mcp reauth docs'],
     ['pi', PI_RPC_ADAPTER, '/mcp-auth files'],
   ] as const)('rejects forged %s auth commands for every main-process delivery mode', async (harness, adapter, message) => {
@@ -248,7 +252,7 @@ describe('agent RPC command frame bounds', () => {
       snapshot: () => ({ runtimeId: 'runtime-auth-policy', harness, cwd: '/tmp', isStreaming: false, imageInputSupported: true }),
       command: wireCommand,
     }
-    const manager = new AgentRpcManager(null, async (cwd) => cwd, async (path) => path, undefined, () => new Set(), adapter)
+    const manager = new AgentRpcManager(null, async (cwd) => cwd, async (path) => path, noProviders, () => new Set(), adapter)
     ;(manager as unknown as { runtimes: Map<string, unknown> }).runtimes.set('runtime-auth-policy', runtime)
     const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64')
     const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
@@ -270,7 +274,6 @@ describe('agent RPC command frame bounds', () => {
 
 describe('agent RPC prompt admission capabilities', () => {
   it.each([
-    ['prime', PRIME_RPC_ADAPTER, true],
     ['omp', OMP_RPC_ADAPTER, false],
     ['pi', PI_RPC_ADAPTER, false],
   ] as const)('keeps or strips streamingBehavior for %s at the wire seam', async (harness, adapter, accepts) => {
@@ -298,7 +301,7 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
 })
 `)
     chmodSync(executable, 0o755)
-    const manager = new AgentRpcManager(executable, async (path) => path, async (path) => path, undefined, () => new Set(), adapter)
+    const manager = new AgentRpcManager(executable, async (path) => path, async (path) => path, noProviders, () => new Set(), adapter)
     managers.push(manager)
     const runtime = await manager.start({ cwd })
     await manager.command(runtime.runtimeId, {
@@ -324,12 +327,12 @@ describe('agent RPC responses', () => {
   it('uses a newly discovered executable for future runtime starts', async () => {
     const fake = fakeAgent("{ id: command.id, type: 'response', command: 'prompt', success: true }")
     let executable: string | null = null
-    const manager = new AgentRpcManager(() => executable, async (cwd) => cwd, async (path) => path)
+    const manager = new AgentRpcManager(() => executable, async (cwd) => cwd, async (path) => path, noProviders, () => new Set(), PI_RPC_ADAPTER)
     managers.push(manager)
 
-    await expect(manager.start({ cwd: fake.cwd })).rejects.toThrow('Prime Agent executable was not found')
+    await expect(manager.start({ cwd: fake.cwd })).rejects.toThrow('Pi executable was not found')
     executable = fake.executable
-    await expect(manager.start({ cwd: fake.cwd })).resolves.toMatchObject({ harness: 'prime', cwd: fake.cwd })
+    await expect(manager.start({ cwd: fake.cwd })).resolves.toMatchObject({ harness: 'pi', cwd: fake.cwd })
   })
 
   it('hydrates and refreshes authoritative context-window usage', async () => {
@@ -426,7 +429,7 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
 `)
     chmodSync(executable, 0o755)
     const events: Array<Record<string, unknown>> = []
-    const runtime = new RpcRuntime(process.execPath, [executable], cwd, ({ event }) => events.push(event), () => undefined)
+    const runtime = new RpcRuntime(process.execPath, [executable], cwd, ({ event }) => events.push(event), () => undefined, {}, {}, PI_RPC_ADAPTER)
     try {
       await runtime.handshake()
       await runtime.command({ type: 'prompt', message: 'continue' })
@@ -478,7 +481,7 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
 `)
     chmodSync(executable, 0o755)
     const events: Array<Record<string, unknown>> = []
-    const runtime = new RpcRuntime(process.execPath, [executable], cwd, ({ event }) => events.push(event), () => undefined)
+    const runtime = new RpcRuntime(process.execPath, [executable], cwd, ({ event }) => events.push(event), () => undefined, {}, {}, PI_RPC_ADAPTER)
     try {
       await runtime.handshake()
       await runtime.command({ type: 'prompt', message: 'continue' })
@@ -770,11 +773,19 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     expect(manager.list()).toHaveLength(5)
   })
 
-  it('decorates runtime reasoning and fast-mode capabilities from the Prime catalog', async () => {
+  it('decorates runtime reasoning and fast-mode capabilities from the provider catalog', async () => {
     const state = "{ id: command.id, type: 'response', command: 'get_state', success: true, data: { sessionId: 'session-1', thinkingLevel: 'high', isStreaming: false, model: { provider: 'openai-codex', id: 'gpt-5.4', name: 'GPT-5.4' } } }"
     const fake = fakeAgent("{ id: command.id, type: 'response', command: 'prompt', success: true }", state)
-    const providers = new PrimeProviderService({ authPath: join(fake.cwd, 'auth.json'), modelsPath: join(fake.cwd, 'models.json') })
-    const manager = new AgentRpcManager(fake.executable, async (cwd) => cwd, async (path) => path, providers)
+    const gpt54: PrimeModelDescriptor = {
+      key: 'openai-codex/gpt-5.4', provider: 'openai-codex', id: 'gpt-5.4', name: 'GPT-5.4', reasoning: true,
+      input: ['text', 'image'], contextWindow: 200_000, maxTokens: 64_000,
+      availableThinkingLevels: ['off', 'low', 'medium', 'high', 'xhigh'], fastModeSupported: true, available: true,
+    }
+    const providers: ProviderCatalog = {
+      requireAvailableModel: async () => { throw new Error('not used') },
+      capabilities: async (provider, modelId) => provider === 'openai-codex' && modelId === 'gpt-5.4' ? gpt54 : undefined,
+    }
+    const manager = new AgentRpcManager(fake.executable, async (cwd) => cwd, async (path) => path, providers, () => new Set(), PI_RPC_ADAPTER)
     managers.push(manager)
 
     const runtime = await manager.start({ cwd: fake.cwd, fast: true })
@@ -794,8 +805,8 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
         input: ['text'], contextWindow: 1_000, maxTokens: 100, availableThinkingLevels: ['off'], fastModeSupported: false, available: true,
       }),
       requireAvailableModel: async () => { throw new Error('not used') },
-    } as unknown as PrimeProviderService
-    const manager = new AgentRpcManager(fake.executable, async (cwd) => cwd, async (path) => path, providers)
+    } as unknown as ProviderCatalog
+    const manager = new AgentRpcManager(fake.executable, async (cwd) => cwd, async (path) => path, providers, () => new Set(), PI_RPC_ADAPTER)
     managers.push(manager)
     const runtime = await manager.start({ cwd: fake.cwd })
 
@@ -905,7 +916,7 @@ setInterval(() => {}, 1000)
 `)
     chmodSync(executable, 0o755)
     const events: Array<{ event: { type?: unknown } }> = []
-    const runtime = new RpcRuntime(executable, [], cwd, (envelope) => events.push(envelope as unknown as { event: { type?: unknown } }), () => undefined)
+    const runtime = new RpcRuntime(executable, [], cwd, (envelope) => events.push(envelope as unknown as { event: { type?: unknown } }), () => undefined, {}, {}, PI_RPC_ADAPTER)
     try {
       const request = (runtime as unknown as { request(command: RpcObject, timeoutMs: number): Promise<RpcObject> }).request.bind(runtime)
       await expect(request({ type: 'sleepy' }, 100)).rejects.toThrow(/timed out after delivery.*do not retry automatically/)
@@ -987,7 +998,7 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   }
 
   const startWatchdogRuntime = async (fake: { cwd: string; executable: string }, events: Record<string, unknown>[]): Promise<RpcRuntime> => {
-    const runtime = new RpcRuntime(fake.executable, [], fake.cwd, ({ event }) => events.push(event), () => undefined, {}, { pollIntervalMs: 80, endGraceMs: 150 })
+    const runtime = new RpcRuntime(fake.executable, [], fake.cwd, ({ event }) => events.push(event), () => undefined, {}, { pollIntervalMs: 80, endGraceMs: 150 }, PI_RPC_ADAPTER)
     await runtime.handshake()
     return runtime
   }

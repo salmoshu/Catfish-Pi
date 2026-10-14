@@ -78,7 +78,7 @@ function piManager(executable: string, options: { providers?: ProviderCatalog } 
     executable,
     async (cwd) => cwd,
     async (path) => path,
-    options.providers,
+    options.providers ?? piCatalog,
     () => new Set(),
     PI_RPC_ADAPTER,
     () => undefined,

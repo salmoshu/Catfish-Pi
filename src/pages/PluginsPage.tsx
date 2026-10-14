@@ -7,7 +7,6 @@ import { EmptyState, Modal } from '@/components/ui'
 
 const MCP_STDIO_HELP: Record<HarnessId, string> = {
   omp: 'OMP starts this stdio MCP server directly in each new session.',
-  prime: 'Prime Agent MCP setup is managed outside Catfish-Pi.',
   pi: 'Pi starts this stdio MCP server through the pi-mcp-adapter extension (pi install npm:pi-mcp-adapter) in each new session.',
 }
 
@@ -15,9 +14,8 @@ type DirectoryTab = 'plugins' | 'skills'
 type AddKind = 'mcp' | 'bundle' | 'extension'
 type McpScope = 'user' | 'project'
 
-const PACKAGE_LABELS: Record<HarnessId, string> = { prime: 'Prime package', omp: 'OMP plugin', pi: 'Pi package' }
+const PACKAGE_LABELS: Record<HarnessId, string> = { omp: 'OMP plugin', pi: 'Pi package' }
 const PACKAGE_HELP: Record<HarnessId, string> = {
-  prime: 'Install a Prime package containing extensions, skills, prompts, or themes with Prime Agent’s package manager.',
   omp: 'Install an OMP plugin bundle with OMP’s native plugin manager. Marketplace targets use name@marketplace.',
   pi: 'Install a Pi package containing extensions, skills, prompts, or themes with Pi’s package manager.',
 }
@@ -186,19 +184,13 @@ export function PluginsPage({ harness, skills, warnings, loading, activeProjectP
       setMcpSupportUpdating(false)
     }
   }
-  const mcpServerName = (skill: SkillRecord): string => skill.id.startsWith('prime-mcp-') ? skill.id.slice('prime-mcp-'.length) : skill.name
   const setMcp = async (skill: SkillRecord, enabled: boolean) => {
     if (capabilityUpdating) return
     setCapabilityUpdating(skill.id)
     setCapabilityAlert('')
     try {
-      if (skill.id.startsWith('prime-mcp-')) {
-        const response = await onMutateCapability({ kind: 'mcp', action: enabled ? 'enable' : 'disable', name: mcpServerName(skill), scope: 'user' })
-        if (!response.ok) setCapabilityAlert(response.output)
-      } else {
-        const response = await onSetMcpEnabled({ name: skill.name, scope: skill.location === 'project' ? 'project' : 'user', projectPath: skill.location === 'project' ? activeProjectPath : undefined, enabled })
-        if (!response.ok) setCapabilityAlert(response.output)
-      }
+      const response = await onSetMcpEnabled({ name: skill.name, scope: skill.location === 'project' ? 'project' : 'user', projectPath: skill.location === 'project' ? activeProjectPath : undefined, enabled })
+      if (!response.ok) setCapabilityAlert(response.output)
     } finally {
       setCapabilityUpdating('')
     }
@@ -219,7 +211,7 @@ export function PluginsPage({ harness, skills, warnings, loading, activeProjectP
       const response = await onMutateCapability({
         kind: skill.kind === 'mcp' ? 'mcp' : 'package',
         action,
-        name: skill.kind === 'mcp' ? mcpServerName(skill) : skill.name,
+        name: skill.name,
         ...(skill.kind === 'mcp' && action === 'remove' && skill.definitionKey !== undefined ? { definitionKey: skill.definitionKey } : {}),
         ...(skill.kind === 'package' ? { source: skill.source } : {}),
         scope: skill.location === 'project' ? 'project' : 'user',
@@ -316,7 +308,7 @@ export function PluginsPage({ harness, skills, warnings, loading, activeProjectP
         ) : <EmptyState icon={<Sparkles size={23}/>} title="Nothing here yet">Try another filter or add a capability package supported by {HARNESS_SHORT_NAMES[harness]}.</EmptyState>}
 
         {confirmDisable ? <Modal title={`Disable ${confirmDisable.name}?`} onClose={() => setConfirmDisable(null)} footer={<><button type="button" className="button" onClick={() => setConfirmDisable(null)}>Cancel</button><button type="button" className="button button--danger" onClick={() => void disableCapability(confirmDisable)}>Yes, disable</button></>}><p className="modal-intro">Are you sure? New sessions will no longer receive this capability until you enable it again. Installed files, server settings, and saved authorization are kept.</p></Modal> : null}
-        {confirmRemove ? <Modal title={`Remove ${confirmRemove.name}?`} onClose={() => setConfirmRemove(null)} footer={<><button type="button" className="button" onClick={() => setConfirmRemove(null)}>Cancel</button><button type="button" className="button button--danger" onClick={() => void removeCapability(confirmRemove)}>Yes, remove completely</button></>}><p className="modal-intro">Are you sure? This removes {confirmRemove.kind === 'mcp' ? harness === 'prime' ? 'only the server definition. Prime authorization is unchanged and must be managed directly in Prime Agent.' : 'only the server definition; harness-owned authorization is not changed.' : 'the package registration and harness-managed files.'} Other packages and MCP entries will be kept.</p></Modal> : null}
+        {confirmRemove ? <Modal title={`Remove ${confirmRemove.name}?`} onClose={() => setConfirmRemove(null)} footer={<><button type="button" className="button" onClick={() => setConfirmRemove(null)}>Cancel</button><button type="button" className="button button--danger" onClick={() => void removeCapability(confirmRemove)}>Yes, remove completely</button></>}><p className="modal-intro">Are you sure? This removes {confirmRemove.kind === 'mcp' ? 'only the server definition; harness-owned authorization is not changed.' : 'the package registration and harness-managed files.'} Other packages and MCP entries will be kept.</p></Modal> : null}
 
         {addOpen ? (
           <Modal
@@ -328,8 +320,8 @@ export function PluginsPage({ harness, skills, warnings, loading, activeProjectP
           >
             {addKind === null ? (
               <div className="capability-choice-list">
-                <button type="button" disabled={harness === 'prime' || harness === 'pi' && !piMcpAdapterInstalled} onClick={() => selectAddKind('mcp')}>
-                  <span><Globe2 size={17}/></span><span><strong>Add MCP</strong><small>{harness === 'prime' ? 'Prime MCP setup is managed outside Catfish-Pi' : harness === 'pi' && !piMcpAdapterInstalled ? 'Enable Pi MCP Adapter first' : 'Add a local stdio server; network servers stay externally managed'}</small></span><ChevronRight size={15}/>
+                <button type="button" disabled={harness === 'pi' && !piMcpAdapterInstalled} onClick={() => selectAddKind('mcp')}>
+                  <span><Globe2 size={17}/></span><span><strong>Add MCP</strong><small>{harness === 'pi' && !piMcpAdapterInstalled ? 'Enable Pi MCP Adapter first' : 'Add a local stdio server; network servers stay externally managed'}</small></span><ChevronRight size={15}/>
                 </button>
                 <button type="button" onClick={() => selectAddKind('bundle')}>
                   <span><Package size={17}/></span><span><strong>Add {harness === 'omp' ? 'Plugin' : 'Package'}</strong><small>{PACKAGE_HELP[harness]}</small></span><ChevronRight size={15}/>

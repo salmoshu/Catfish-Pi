@@ -70,7 +70,7 @@ describe('PluginsPage bundled capability controls', () => {
     const browser: SkillRecord = { id: 'prime-work-browser', name: 'Browser', description: 'In-app browser.', kind: 'skill', location: 'system', enabled: false }
     const render = async (enabled: boolean) => act(async () => {
       root.render(<PluginsPage
-        harness="prime" skills={[browser]} warnings={[]} loading={false}
+        harness="pi" skills={[browser]} warnings={[]} loading={false}
         askUserEnabled={true} onSetAskUserEnabled={async () => undefined}
         browserEnabled={enabled} onSetBrowserEnabled={setBrowserEnabled}
         computerUseEnabled={false} onSetComputerUseEnabled={async () => undefined} onOpenExternal={() => undefined}
@@ -103,7 +103,7 @@ describe('PluginsPage bundled capability controls', () => {
     }
     const render = async (enabled: boolean) => act(async () => {
       root.render(<PluginsPage
-        harness="prime" skills={[{ ...notion, enabled }]} warnings={[]} loading={false}
+        harness="pi" skills={[{ ...notion, enabled }]} warnings={[]} loading={false}
         askUserEnabled={true} onSetAskUserEnabled={async () => undefined}
         browserEnabled={true} onSetBrowserEnabled={async () => undefined}
         computerUseEnabled={false} onSetComputerUseEnabled={async () => undefined} onOpenExternal={() => undefined}
@@ -168,7 +168,7 @@ describe('PluginsPage bundled capability controls', () => {
     } as SkillRecord & { definitionKey: string }
     await act(async () => {
       root.render(<PluginsPage
-        harness="prime" skills={[docs]} warnings={[]} loading={false}
+        harness="pi" skills={[docs]} warnings={[]} loading={false}
         askUserEnabled={true} onSetAskUserEnabled={async () => undefined}
         browserEnabled={true} onSetBrowserEnabled={async () => undefined}
         computerUseEnabled={false} onSetComputerUseEnabled={async () => undefined} onOpenExternal={() => undefined}
@@ -186,7 +186,7 @@ describe('PluginsPage bundled capability controls', () => {
     expect(container.querySelector(`#${actions.lastElementChild?.getAttribute('aria-describedby')}`)?.textContent).toContain('Network MCP servers are managed outside Catfish-Pi.')
     await act(async () => { remove.click() })
     const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!
-    expect(dialog.textContent).toContain('only the server definition. Prime authorization is unchanged')
+    expect(dialog.textContent).toContain('only the server definition; harness-owned authorization is not changed.')
     expect(dialog.textContent).toContain('Other packages and MCP entries will be kept')
     await act(async () => { [...dialog.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === 'Yes, remove completely')!.click(); await Promise.resolve() })
     expect(mutateCapability).toHaveBeenCalledWith({ kind: 'mcp', action: 'remove', name: 'team docs', definitionKey: 'team/docs', scope: 'user', projectPath: undefined })
@@ -196,11 +196,11 @@ describe('PluginsPage bundled capability controls', () => {
     const record: SkillRecord = {
       id: 'mcp:user:oversized', name: 'oversized definition', description: 'Externally managed format.',
       kind: 'mcp', location: 'user', enabled: true, definitionRemovalAvailable: false,
-      availability: { available: false, detail: 'Prime Agent MCP servers are managed outside Catfish-Pi.' },
+      availability: { available: false, detail: 'Network MCP servers are managed outside Catfish-Pi.' },
     }
     await act(async () => {
       root.render(<PluginsPage
-        harness="prime" skills={[record]} warnings={[]} loading={false}
+        harness="pi" skills={[record]} warnings={[]} loading={false}
         askUserEnabled={true} onSetAskUserEnabled={async () => undefined}
         browserEnabled={true} onSetBrowserEnabled={async () => undefined}
         computerUseEnabled={false} onSetComputerUseEnabled={async () => undefined} onOpenExternal={() => undefined}
@@ -238,11 +238,11 @@ describe('PluginsPage bundled capability controls', () => {
     expect(container.textContent).toContain('Install Cua Driver before enabling Computer Use.')
   })
 
-  it('disables Prime MCP creation and only submits local stdio servers for OMP', async () => {
+  it('disables Pi MCP creation without its adapter and only submits local stdio servers for OMP', async () => {
     const connect = vi.fn(async () => ({ ok: true, output: 'saved server' }))
     await act(async () => {
       root.render(<PluginsPage
-        harness="prime" skills={[]} warnings={[]} loading={false} activeProjectPath="/repo"
+        harness="pi" skills={[]} warnings={[]} loading={false} activeProjectPath="/repo"
         askUserEnabled={true} onSetAskUserEnabled={async () => undefined}
         browserEnabled={true} onSetBrowserEnabled={async () => undefined}
         computerUseEnabled={false} onSetComputerUseEnabled={async () => undefined} onOpenExternal={() => undefined}
@@ -255,9 +255,9 @@ describe('PluginsPage bundled capability controls', () => {
     })
     await act(async () => { container.querySelector<HTMLButtonElement>('.button--primary')!.click() })
     let dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!
-    const primeAddMcp = [...dialog.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent?.includes('Add MCP'))!
-    expect(primeAddMcp.disabled).toBe(true)
-    expect(primeAddMcp.textContent).toContain('managed outside Catfish-Pi')
+    const piAddMcp = [...dialog.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent?.includes('Add MCP'))!
+    expect(piAddMcp.disabled).toBe(true)
+    expect(piAddMcp.textContent).toContain('Enable Pi MCP Adapter first')
     expect(dialog.textContent).not.toContain('Server URL')
     expect(dialog.textContent).not.toContain('Authentication')
     expect(connect).not.toHaveBeenCalled()
@@ -318,7 +318,7 @@ describe('PluginsPage bundled capability controls', () => {
 
     await act(async () => {
       root.render(<PluginsPage
-        harness="prime" skills={[]} warnings={[]} loading={false}
+        harness="omp" skills={[]} warnings={[]} loading={false}
         askUserEnabled={true} onSetAskUserEnabled={async () => undefined}
         browserEnabled={true} onSetBrowserEnabled={async () => undefined}
         computerUseEnabled={false} onSetComputerUseEnabled={async () => undefined} onOpenExternal={() => undefined}

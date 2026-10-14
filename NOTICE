@@ -38,7 +38,6 @@ the named projects' licenses govern their own code.
 - The Vazirmatn font subset (`public/fonts/`) is © Saber Rastikerdar, SIL Open
   Font License 1.1; see `public/fonts/LICENSE-vazirmatn.txt` and
   `docs/reference-sources.md`.
-- The Prime Intellect butterfly mark is sourced from the MIT-licensed Prime
-  Agent repository (`PrimeIntellect-ai/prime-agent`).
-- Application icons and the Catfish-Pi mascot artwork are provisional assets
-  carried over from the GooeyPi snapshot pending original Catfish-Pi artwork.
+- The Catfish-Pi application icon and mascot artwork (`assets/icon.svg`,
+  `assets/brand/catfish-mascot.svg`, and their rendered PNG/ICNS derivatives)
+  are original Catfish-Pi artwork created for this project (2026-10).

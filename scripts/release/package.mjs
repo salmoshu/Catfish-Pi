@@ -46,7 +46,7 @@ try {
   if (isPublic && platform === 'mac') validateReleaseCredentials(process.env)
   if (isPublic && platform === 'win') validateWindowsReleaseCredentials(process.env)
   const verifyScript = skipVerify ? 'build:bundle' : platform === 'mac' ? 'release:verify' : 'release:verify:package'
-  run('npm', ['run', verifyScript], withoutReleaseCredentials(process.env))
+  run('pnpm', ['run', verifyScript], withoutReleaseCredentials(process.env))
   if (!dryRun) rmSync(resolve('release', platform, arch), { recursive: true, force: true })
 
   const builderArgs = [`--${platform}`, `--${arch}`, '--publish', 'never', `--config.directories.output=release/${platform}/${arch}`]

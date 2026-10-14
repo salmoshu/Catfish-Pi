@@ -2,9 +2,16 @@ import { EventEmitter } from 'node:events'
 import type { WebContents } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
 import { AgentBrowserService } from '../../electron/main/browser/agent-service'
+import { canonicalSessionPath } from '../../electron/main/session-paths'
 import type { AgentBrowserPointerEvent, AgentBrowserState } from '../../src/types/api'
 
 let nextGuestId = 1000
+
+// The production bridge canonicalizes session paths before they reach the
+// service, so tests must use the canonical form as well (it differs from the
+// literal on Windows, where resolve() produces a drive-qualified path).
+const SESSION_A = canonicalSessionPath('/sessions/a.jsonl')
+const SESSION_B = canonicalSessionPath('/sessions/b.jsonl')
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -137,21 +144,21 @@ function fixture(options?: { actionTimeoutMs?: number }) {
 describe('AgentBrowserService', () => {
   it('opens a tab once the renderer attaches an approved guest and navigates it', async () => {
     const { service, openAttached } = fixture()
-    const { guest, tabId, result } = await openAttached('/sessions/a.jsonl', 'https://example.com/')
+    const { guest, tabId, result } = await openAttached(SESSION_A, 'https://example.com/')
     expect(guest.loadedUrls).toContain('https://example.com/')
     expect(guest.throttling).toBe(false)
     expect(result.url).toBe('https://example.com/')
     const snapshot = service.state()
     expect(snapshot.tabs).toHaveLength(1)
-    expect(snapshot.tabs[0]).toMatchObject({ tabId, sessionFile: '/sessions/a.jsonl', attached: true, active: true })
+    expect(snapshot.tabs[0]).toMatchObject({ tabId, sessionFile: SESSION_A, attached: true, active: true })
   })
 
   it('rejects unapproved guests and guests already bound to another tab', async () => {
     const { service, guests, openAttached } = fixture()
-    const { guest } = await openAttached('/sessions/a.jsonl')
+    const { guest } = await openAttached(SESSION_A)
     const rogue = new FakeGuest()
     guests.set(rogue.id, rogue)
-    const opening = service.openTab('/sessions/a.jsonl', {})
+    const opening = service.openTab(SESSION_A, {})
     await new Promise((resolveTick) => setTimeout(resolveTick, 10))
     const pending = service.state().tabs.find((tab) => !tab.attached)!
     expect(() => service.attachTab(pending.tabId, rogue.id)).toThrow(/not an approved browser guest/)
@@ -162,15 +169,15 @@ describe('AgentBrowserService', () => {
 
   it('promptly rejects actions waiting for attachment when their session is revoked', async () => {
     const { service } = fixture()
-    const opening = service.openTab('/sessions/a.jsonl', {})
-    const pending = service.state().tabs.find((tab) => tab.sessionFile === '/sessions/a.jsonl')
+    const opening = service.openTab(SESSION_A, {})
+    const pending = service.state().tabs.find((tab) => tab.sessionFile === SESSION_A)
     expect(pending).toBeDefined()
-    const action = service.evaluate('/sessions/a.jsonl', { tabId: pending!.tabId, code: "'never-executed'" })
+    const action = service.evaluate(SESSION_A, { tabId: pending!.tabId, code: "'never-executed'" })
     const openingOutcome = opening.then(() => null, (error: unknown) => error)
     const actionOutcome = action.then(() => null, (error: unknown) => error)
     await Promise.resolve()
 
-    expect(service.closeForSession('/sessions/a.jsonl')).toBe(true)
+    expect(service.closeForSession(SESSION_A)).toBe(true)
     const [openingError, actionError] = await Promise.all([openingOutcome, actionOutcome])
     expect(String(openingError)).toMatch(/browser tab access changed/i)
     expect(String(actionError)).toMatch(/browser tab access changed/i)
@@ -179,36 +186,36 @@ describe('AgentBrowserService', () => {
 
   it('scopes agent actions to the owning session', async () => {
     const { service, openAttached } = fixture()
-    const { tabId } = await openAttached('/sessions/a.jsonl', 'https://example.com/')
-    await openAttached('/sessions/b.jsonl', 'https://other.example/')
-    await expect(service.closeTabScoped('/sessions/b.jsonl', { tabId })).rejects.toThrow(/does not belong to this thread/)
-    await expect(service.readPage('/sessions/b.jsonl', { tabId })).rejects.toThrow(/does not belong to this thread/)
-    const mine = await service.listTabs('/sessions/a.jsonl')
+    const { tabId } = await openAttached(SESSION_A, 'https://example.com/')
+    await openAttached(SESSION_B, 'https://other.example/')
+    await expect(service.closeTabScoped(SESSION_B, { tabId })).rejects.toThrow(/does not belong to this thread/)
+    await expect(service.readPage(SESSION_B, { tabId })).rejects.toThrow(/does not belong to this thread/)
+    const mine = await service.listTabs(SESSION_A)
     expect(mine.tabs).toHaveLength(1)
   })
 
   it('enforces the per-session tab cap', async () => {
     const { service, openAttached } = fixture()
-    for (let index = 0; index < 6; index += 1) await openAttached('/sessions/a.jsonl')
-    await expect(service.openTab('/sessions/a.jsonl', {})).rejects.toThrow(/already has 6 browser tabs/)
+    for (let index = 0; index < 6; index += 1) await openAttached(SESSION_A)
+    await expect(service.openTab(SESSION_A, {})).rejects.toThrow(/already has 6 browser tabs/)
   })
 
   it('refuses non-http(s) navigation targets', async () => {
     const { service, openAttached } = fixture()
-    await openAttached('/sessions/a.jsonl')
-    await expect(service.navigate('/sessions/a.jsonl', { url: 'file:///etc/passwd' })).rejects.toThrow(/credential-free http/)
-    await expect(service.navigate('/sessions/a.jsonl', { url: 'https://user:pw@example.com/' })).rejects.toThrow(/credential-free http/)
-    await expect(service.openTab('/sessions/a.jsonl', { url: 'javascript:alert(1)' })).rejects.toThrow(/credential-free http/)
+    await openAttached(SESSION_A)
+    await expect(service.navigate(SESSION_A, { url: 'file:///etc/passwd' })).rejects.toThrow(/credential-free http/)
+    await expect(service.navigate(SESSION_A, { url: 'https://user:pw@example.com/' })).rejects.toThrow(/credential-free http/)
+    await expect(service.openTab(SESSION_A, { url: 'javascript:alert(1)' })).rejects.toThrow(/credential-free http/)
   })
 
   it('clicks element refs through injected geometry and trusted input events', async () => {
     const { service, openAttached } = fixture()
-    const { guest } = await openAttached('/sessions/a.jsonl', 'https://example.com/')
+    const { guest } = await openAttached(SESSION_A, 'https://example.com/')
     guest.scriptResult = (code) => {
       if (code.includes('__primeWorkAgentRefs')) return JSON.stringify({ x: 12, y: 34 })
       return JSON.stringify({ url: guest.url, title: guest.title, innerWidth: 640, innerHeight: 480, scrollY: 0, scrollHeight: 900, readyState: 'complete' })
     }
-    await service.click('/sessions/a.jsonl', { ref: 3 })
+    await service.click(SESSION_A, { ref: 3 })
     const types = guest.inputEvents.map((event) => event.type)
     expect(types).toEqual(expect.arrayContaining(['mouseMoved', 'mousePressed', 'mouseReleased']))
     expect(guest.inputEvents.every((event) => event.method === 'Input.dispatchMouseEvent')).toBe(true)
@@ -217,16 +224,16 @@ describe('AgentBrowserService', () => {
 
   it('glides the pointer between clicks and emits synchronized pointer events', async () => {
     const { service, pointerEvents, openAttached } = fixture()
-    const { guest } = await openAttached('/sessions/a.jsonl', 'https://example.com/')
-    await service.click('/sessions/a.jsonl', { x: 20, y: 30 })
+    const { guest } = await openAttached(SESSION_A, 'https://example.com/')
+    await service.click(SESSION_A, { x: 20, y: 30 })
     // First action: cursor appears in place, no glide.
     expect(pointerEvents.at(-1)).toMatchObject({ from: null, to: { x: 20, y: 30 }, action: 'click', durationMs: 0 })
     guest.inputEvents.length = 0
-    await service.click('/sessions/a.jsonl', { x: 320, y: 230 })
+    await service.click(SESSION_A, { x: 320, y: 230 })
     const glide = pointerEvents.at(-1)!
     expect(glide).toMatchObject({ from: { x: 20, y: 30 }, to: { x: 320, y: 230 }, action: 'click' })
     expect(glide.durationMs).toBeGreaterThan(0)
-    expect(glide.sessionFile).toBe('/sessions/a.jsonl')
+    expect(glide.sessionFile).toBe(SESSION_A)
     // The glide sends a trail of intermediate mouseMoved events ending at the target.
     const moves = guest.inputEvents.filter((event) => event.type === 'mouseMoved')
     expect(moves.length).toBeGreaterThanOrEqual(5)
@@ -239,14 +246,14 @@ describe('AgentBrowserService', () => {
       if (code.includes('__primeWorkAgentRefs')) return JSON.stringify({ x: 40, y: 50 })
       return JSON.stringify({ url: guest.url, title: guest.title, innerWidth: 640, innerHeight: 480, scrollY: 0, scrollHeight: 900, readyState: 'complete' })
     }
-    await service.type('/sessions/a.jsonl', { text: 'hi', ref: 1 })
+    await service.type(SESSION_A, { text: 'hi', ref: 1 })
     expect(pointerEvents.at(-1)).toMatchObject({ to: { x: 40, y: 50 }, action: 'move' })
   })
 
   it('types into the page and submits with Enter', async () => {
     const { service, openAttached } = fixture()
-    const { guest } = await openAttached('/sessions/a.jsonl', 'https://example.com/')
-    await service.type('/sessions/a.jsonl', { text: 'hello world', submit: true })
+    const { guest } = await openAttached(SESSION_A, 'https://example.com/')
+    await service.type(SESSION_A, { text: 'hello world', submit: true })
     expect(guest.insertedText).toEqual(['hello world'])
     const enterEvents = guest.inputEvents.filter((event) => event.method === 'Input.dispatchKeyEvent' && event.key === 'Enter')
     expect(enterEvents.map((event) => event.type)).toEqual(['keyDown', 'keyUp'])
@@ -255,8 +262,8 @@ describe('AgentBrowserService', () => {
 
   it('captures screenshots at CSS pixel scale with the pointer marker drawn in', async () => {
     const { service, openAttached } = fixture()
-    const { guest } = await openAttached('/sessions/a.jsonl', 'https://example.com/')
-    const shot = await service.screenshot('/sessions/a.jsonl', {})
+    const { guest } = await openAttached(SESSION_A, 'https://example.com/')
+    const shot = await service.screenshot(SESSION_A, {})
     // Retina captures report DIP size but encode 2x pixels; the resize to the
     // CSS viewport must happen unconditionally.
     expect(shot.mimeType).toBe('image/jpeg')
@@ -264,31 +271,31 @@ describe('AgentBrowserService', () => {
     expect(shot.height).toBe(480)
     expect(Buffer.from(shot.data as string, 'base64').toString()).toBe('resized-jpeg')
     // With a pointer, the capture brackets an in-page cursor marker.
-    await service.click('/sessions/a.jsonl', { x: 10, y: 10 })
+    await service.click(SESSION_A, { x: 10, y: 10 })
     guest.executedScripts.length = 0
-    await service.screenshot('/sessions/a.jsonl', {})
+    await service.screenshot(SESSION_A, {})
     expect(guest.executedScripts.some((code) => code.includes('__primeWorkAgentCursorMarker') && code.includes("style.left = '10px'"))).toBe(true)
     expect(guest.executedScripts.some((code) => code.includes('marker.remove()'))).toBe(true)
   })
 
   it('rejects a guest call that never answers after actionTimeoutMs', async () => {
     const { service, openAttached } = fixture({ actionTimeoutMs: 50 })
-    const { guest, tabId } = await openAttached('/sessions/a.jsonl')
+    const { guest, tabId } = await openAttached(SESSION_A)
     guest.scriptResult = (code) => code.includes('hangs') ? new Promise(() => {}) : JSON.stringify({})
 
-    await expect(service.evaluate('/sessions/a.jsonl', { tabId, code: "'hangs'" })).rejects.toThrow(/did not answer this action in time/)
+    await expect(service.evaluate(SESSION_A, { tabId, code: "'hangs'" })).rejects.toThrow(/did not answer this action in time/)
   })
 
   it('releases the per-tab queue after the timeout grace even if the action is still pending', async () => {
     const { service, openAttached } = fixture({ actionTimeoutMs: 50 })
-    const { guest, tabId } = await openAttached('/sessions/a.jsonl')
+    const { guest, tabId } = await openAttached(SESSION_A)
     vi.useFakeTimers()
     try {
       guest.loadURL = () => new Promise<void>(() => {})
-      const hung = service.navigate('/sessions/a.jsonl', { tabId, url: 'https://example.org/' })
+      const hung = service.navigate(SESSION_A, { tabId, url: 'https://example.org/' })
       void hung.catch(() => undefined)
       await vi.advanceTimersByTimeAsync(50 + 5_000 + 10)
-      await expect(service.evaluate('/sessions/a.jsonl', { tabId, code: "'after'" })).resolves.toEqual({})
+      await expect(service.evaluate(SESSION_A, { tabId, code: "'after'" })).resolves.toEqual({})
     } finally {
       vi.useRealTimers()
     }
@@ -296,14 +303,14 @@ describe('AgentBrowserService', () => {
 
   it('rejects a screenshot when navigation strands capturePage', async () => {
     const { service, openAttached } = fixture()
-    const { guest, tabId } = await openAttached('/sessions/a.jsonl')
+    const { guest, tabId } = await openAttached(SESSION_A)
     const started = deferred<void>()
     guest.capturePage = () => {
       started.resolve()
       return new Promise<never>(() => {})
     }
 
-    const stranded = service.screenshot('/sessions/a.jsonl', { tabId })
+    const stranded = service.screenshot(SESSION_A, { tabId })
     await started.promise
     guest.startNavigation({ url: 'https://example.org/', isSameDocument: false, isMainFrame: true })
 
@@ -312,8 +319,8 @@ describe('AgentBrowserService', () => {
 
   it('marks tabs detached when their guest is destroyed and reactivates a sibling on close', async () => {
     const { service, openAttached } = fixture()
-    const first = await openAttached('/sessions/a.jsonl')
-    const second = await openAttached('/sessions/a.jsonl')
+    const first = await openAttached(SESSION_A)
+    const second = await openAttached(SESSION_A)
     expect(service.state().tabs.find((tab) => tab.tabId === second.tabId)?.active).toBe(true)
     second.guest.destroy()
     expect(service.state().tabs.find((tab) => tab.tabId === second.tabId)).toMatchObject({ attached: false })
@@ -323,7 +330,7 @@ describe('AgentBrowserService', () => {
 
   it('rejects work queued for a destroyed guest while fresh work follows reattachment', async () => {
     const { service, newGuest, openAttached } = fixture()
-    const { guest, tabId } = await openAttached('/sessions/a.jsonl', 'https://example.com/')
+    const { guest, tabId } = await openAttached(SESSION_A, 'https://example.com/')
     const started = deferred<void>()
     const release = deferred<string>()
     guest.scriptResult = (code) => {
@@ -334,11 +341,11 @@ describe('AgentBrowserService', () => {
       return JSON.stringify({ executed: true })
     }
 
-    const running = service.evaluate('/sessions/a.jsonl', { tabId, code: "'running-before-destroy'" })
+    const running = service.evaluate(SESSION_A, { tabId, code: "'running-before-destroy'" })
     await started.promise
-    const stale = service.evaluate('/sessions/a.jsonl', { tabId, code: "'queued-before-destroy'" })
+    const stale = service.evaluate(SESSION_A, { tabId, code: "'queued-before-destroy'" })
     guest.destroy()
-    const fresh = service.evaluate('/sessions/a.jsonl', { tabId, code: "'queued-after-destroy'" })
+    const fresh = service.evaluate(SESSION_A, { tabId, code: "'queued-after-destroy'" })
     const replacement = newGuest()
     service.attachTab(tabId, replacement.id)
     const staleRejected = expect(stale).rejects.toThrow(/browser tab access changed/i)
@@ -355,12 +362,12 @@ describe('AgentBrowserService', () => {
 
   it('closes every browser guest owned by a session without disturbing other sessions', async () => {
     const { service, newGuest, openAttached } = fixture()
-    const first = await openAttached('/sessions/a.jsonl', 'https://game.example/one')
-    const second = await openAttached('/sessions/a.jsonl', 'https://game.example/two')
-    const other = await openAttached('/sessions/b.jsonl', 'https://other.example/')
+    const first = await openAttached(SESSION_A, 'https://game.example/one')
+    const second = await openAttached(SESSION_A, 'https://game.example/two')
+    const other = await openAttached(SESSION_B, 'https://other.example/')
     const preview = newGuest()
     preview.url = 'https://game.example/preview'
-    service.setPreviewContext(preview.id, '/sessions/a.jsonl')
+    service.setPreviewContext(preview.id, SESSION_A)
 
     expect(service.closeForSession('/sessions/./a.jsonl')).toBe(true)
 
@@ -371,36 +378,36 @@ describe('AgentBrowserService', () => {
     }
     expect(other.guest.destroyed).toBe(false)
     expect(service.state().tabs).toEqual([
-      expect.objectContaining({ tabId: other.tabId, sessionFile: '/sessions/b.jsonl', attached: true }),
+      expect.objectContaining({ tabId: other.tabId, sessionFile: SESSION_B, attached: true }),
     ])
-    expect((await service.listTabs('/sessions/a.jsonl')).tabs).toEqual([])
-    expect(service.closeForSession('/sessions/a.jsonl')).toBe(false)
+    expect((await service.listTabs(SESSION_A)).tabs).toEqual([])
+    expect(service.closeForSession(SESSION_A)).toBe(false)
   })
 
   it('adopts the user preview tab as the default target for its session', async () => {
     const { service, newGuest } = fixture()
     const preview = newGuest()
     preview.url = 'https://dev.local/app'
-    expect(service.setPreviewContext(preview.id, '/sessions/a.jsonl')).toBe(true)
-    const listed = await service.listTabs('/sessions/a.jsonl')
+    expect(service.setPreviewContext(preview.id, SESSION_A)).toBe(true)
+    const listed = await service.listTabs(SESSION_A)
     expect(listed.tabs).toEqual([expect.objectContaining({ tabId: 'preview', url: 'https://dev.local/app', attached: true, active: true })])
     // With no agent tab open, actions land on the preview guest.
-    await service.click('/sessions/a.jsonl', { x: 15, y: 25 })
+    await service.click(SESSION_A, { x: 15, y: 25 })
     expect(preview.inputEvents.find((event) => event.type === 'mousePressed')).toMatchObject({ x: 15, y: 25 })
     // Other sessions cannot see or use it.
-    expect((await service.listTabs('/sessions/b.jsonl')).tabs).toEqual([])
-    await expect(service.click('/sessions/b.jsonl', { x: 1, y: 1 })).rejects.toThrow(/no browser tab yet/)
-    await expect(service.click('/sessions/b.jsonl', { tabId: 'preview', x: 1, y: 1 })).rejects.toThrow(/not open for this thread/)
+    expect((await service.listTabs(SESSION_B)).tabs).toEqual([])
+    await expect(service.click(SESSION_B, { x: 1, y: 1 })).rejects.toThrow(/no browser tab yet/)
+    await expect(service.click(SESSION_B, { tabId: 'preview', x: 1, y: 1 })).rejects.toThrow(/not open for this thread/)
     // Agents cannot close the user's tab; clearing the context revokes access.
-    await expect(service.closeTabScoped('/sessions/a.jsonl', { tabId: 'preview' })).rejects.toThrow(/belongs to the user/)
+    await expect(service.closeTabScoped(SESSION_A, { tabId: 'preview' })).rejects.toThrow(/belongs to the user/)
     expect(service.setPreviewContext(null, null)).toBe(true)
-    await expect(service.click('/sessions/a.jsonl', { x: 1, y: 1 })).rejects.toThrow(/no browser tab yet/)
+    await expect(service.click(SESSION_A, { x: 1, y: 1 })).rejects.toThrow(/no browser tab yet/)
   })
 
   it('rejects queued Preview work after the user clears the binding', async () => {
     const { service, newGuest } = fixture()
     const preview = newGuest()
-    service.setPreviewContext(preview.id, '/sessions/a.jsonl')
+    service.setPreviewContext(preview.id, SESSION_A)
     const started = deferred<void>()
     const release = deferred<string>()
     preview.scriptResult = (code) => {
@@ -411,9 +418,9 @@ describe('AgentBrowserService', () => {
       return JSON.stringify({ executed: true })
     }
 
-    const running = service.evaluate('/sessions/a.jsonl', { code: "'running-before-clear'" })
+    const running = service.evaluate(SESSION_A, { code: "'running-before-clear'" })
     await started.promise
-    const queued = service.evaluate('/sessions/a.jsonl', { code: "'queued-after-clear'" })
+    const queued = service.evaluate(SESSION_A, { code: "'queued-after-clear'" })
     expect(service.setPreviewContext(null, null)).toBe(true)
     const queuedRejected = expect(queued).rejects.toThrow(/browser tab access changed/i)
     release.resolve(JSON.stringify({ completed: true }))
@@ -426,7 +433,7 @@ describe('AgentBrowserService', () => {
   it('revokes the old owner while preserving Preview serialization across reassignment', async () => {
     const { service, newGuest } = fixture()
     const preview = newGuest()
-    service.setPreviewContext(preview.id, '/sessions/a.jsonl')
+    service.setPreviewContext(preview.id, SESSION_A)
     const started = deferred<void>()
     const release = deferred<string>()
     const executionOrder: string[] = []
@@ -441,11 +448,11 @@ describe('AgentBrowserService', () => {
       return JSON.stringify({ completed: true })
     }
 
-    const running = service.evaluate('/sessions/a.jsonl', { code: "'running-owner-a'" })
+    const running = service.evaluate(SESSION_A, { code: "'running-owner-a'" })
     await started.promise
-    const stale = service.evaluate('/sessions/a.jsonl', { code: "'queued-owner-a'" })
-    expect(service.setPreviewContext(preview.id, '/sessions/b.jsonl')).toBe(true)
-    const nextOwner = service.evaluate('/sessions/b.jsonl', { code: "'next-owner-b'" })
+    const stale = service.evaluate(SESSION_A, { code: "'queued-owner-a'" })
+    expect(service.setPreviewContext(preview.id, SESSION_B)).toBe(true)
+    const nextOwner = service.evaluate(SESSION_B, { code: "'next-owner-b'" })
     const staleRejected = expect(stale).rejects.toThrow(/browser tab access changed/i)
     await Promise.resolve()
     expect(executionOrder).toEqual(['running-owner-a'])
@@ -461,7 +468,7 @@ describe('AgentBrowserService', () => {
 
   it('rejects queued work when its session closes before guest teardown completes', async () => {
     const { service, openAttached } = fixture()
-    const { guest, tabId } = await openAttached('/sessions/a.jsonl', 'https://example.com/')
+    const { guest, tabId } = await openAttached(SESSION_A, 'https://example.com/')
     guest.deferClose = true
     const started = deferred<void>()
     const release = deferred<string>()
@@ -473,10 +480,10 @@ describe('AgentBrowserService', () => {
       return JSON.stringify({ executed: true })
     }
 
-    const running = service.evaluate('/sessions/a.jsonl', { tabId, code: "'running-before-session-close'" })
+    const running = service.evaluate(SESSION_A, { tabId, code: "'running-before-session-close'" })
     await started.promise
-    const queued = service.evaluate('/sessions/a.jsonl', { tabId, code: "'queued-after-session-close'" })
-    expect(service.closeForSession('/sessions/a.jsonl')).toBe(true)
+    const queued = service.evaluate(SESSION_A, { tabId, code: "'queued-after-session-close'" })
+    expect(service.closeForSession(SESSION_A)).toBe(true)
     const queuedRejected = expect(queued).rejects.toThrow(/browser tab access changed/i)
     release.resolve(JSON.stringify({ completed: true }))
 
@@ -488,7 +495,7 @@ describe('AgentBrowserService', () => {
 
   it('rejects queued work when an ordinary attached tab is closed', async () => {
     const { service, openAttached } = fixture()
-    const { guest, tabId } = await openAttached('/sessions/a.jsonl', 'https://example.com/')
+    const { guest, tabId } = await openAttached(SESSION_A, 'https://example.com/')
     const started = deferred<void>()
     const release = deferred<string>()
     guest.scriptResult = (code) => {
@@ -499,9 +506,9 @@ describe('AgentBrowserService', () => {
       return JSON.stringify({ executed: true })
     }
 
-    const running = service.evaluate('/sessions/a.jsonl', { tabId, code: "'running-before-tab-close'" })
+    const running = service.evaluate(SESSION_A, { tabId, code: "'running-before-tab-close'" })
     await started.promise
-    const queued = service.evaluate('/sessions/a.jsonl', { tabId, code: "'queued-after-tab-close'" })
+    const queued = service.evaluate(SESSION_A, { tabId, code: "'queued-after-tab-close'" })
     expect(service.closeTab(tabId)).toBe(true)
     const queuedRejected = expect(queued).rejects.toThrow(/browser tab access changed/i)
     release.resolve(JSON.stringify({ completed: true }))
@@ -513,40 +520,40 @@ describe('AgentBrowserService', () => {
 
   it('announces every agent action so the UI can surface the Browser panel', async () => {
     const { service, activityEvents, newGuest, openAttached } = fixture()
-    const { tabId } = await openAttached('/sessions/a.jsonl', 'https://example.com/')
-    expect(activityEvents).toEqual([{ sessionFile: '/sessions/a.jsonl', tabId }])
-    await service.readPage('/sessions/a.jsonl', {})
-    expect(activityEvents.at(-1)).toEqual({ sessionFile: '/sessions/a.jsonl', tabId })
+    const { tabId } = await openAttached(SESSION_A, 'https://example.com/')
+    expect(activityEvents).toEqual([{ sessionFile: SESSION_A, tabId }])
+    await service.readPage(SESSION_A, {})
+    expect(activityEvents.at(-1)).toEqual({ sessionFile: SESSION_A, tabId })
     // Actions on the adopted preview tab announce with the preview id.
     const preview = newGuest()
-    service.setPreviewContext(preview.id, '/sessions/b.jsonl')
-    await service.readPage('/sessions/b.jsonl', {})
-    expect(activityEvents.at(-1)).toEqual({ sessionFile: '/sessions/b.jsonl', tabId: 'preview' })
+    service.setPreviewContext(preview.id, SESSION_B)
+    await service.readPage(SESSION_B, {})
+    expect(activityEvents.at(-1)).toEqual({ sessionFile: SESSION_B, tabId: 'preview' })
   })
 
   it('rejects unapproved preview guests and clears the binding when the guest dies', async () => {
     const { service, guests, newGuest } = fixture()
     const rogue = new FakeGuest()
     guests.set(rogue.id, rogue)
-    expect(() => service.setPreviewContext(rogue.id, '/sessions/a.jsonl')).toThrow(/not an approved browser guest/)
+    expect(() => service.setPreviewContext(rogue.id, SESSION_A)).toThrow(/not an approved browser guest/)
     const preview = newGuest()
-    service.setPreviewContext(preview.id, '/sessions/a.jsonl')
+    service.setPreviewContext(preview.id, SESSION_A)
     preview.destroy()
-    expect((await service.listTabs('/sessions/a.jsonl')).tabs).toEqual([])
+    expect((await service.listTabs(SESSION_A)).tabs).toEqual([])
   })
 
   it('rejects malformed keys, scroll directions, and coordinates', async () => {
     const { service, openAttached } = fixture()
-    await openAttached('/sessions/a.jsonl')
-    await expect(service.pressKey('/sessions/a.jsonl', { key: 'definitely-not-a-key' })).rejects.toThrow(/key must be/)
-    await expect(service.scroll('/sessions/a.jsonl', { direction: 'sideways' })).rejects.toThrow(/direction must be/)
-    await expect(service.click('/sessions/a.jsonl', {})).rejects.toThrow(/ref .*or x and y/)
-    await expect(service.click('/sessions/a.jsonl', { x: -5, y: 10 })).rejects.toThrow(/within the page viewport/)
+    await openAttached(SESSION_A)
+    await expect(service.pressKey(SESSION_A, { key: 'definitely-not-a-key' })).rejects.toThrow(/key must be/)
+    await expect(service.scroll(SESSION_A, { direction: 'sideways' })).rejects.toThrow(/direction must be/)
+    await expect(service.click(SESSION_A, {})).rejects.toThrow(/ref .*or x and y/)
+    await expect(service.click(SESSION_A, { x: -5, y: 10 })).rejects.toThrow(/within the page viewport/)
   })
 
   it('rejects an in-flight page script when the document is replaced', async () => {
     const { service, openAttached } = fixture()
-    const { guest, tabId } = await openAttached('/sessions/a.jsonl', 'https://example.com/')
+    const { guest, tabId } = await openAttached(SESSION_A, 'https://example.com/')
     const started = deferred<void>()
     // Chromium discards the execution context that owns the promise, so the
     // script never settles; a never-resolving promise models exactly that.
@@ -558,7 +565,7 @@ describe('AgentBrowserService', () => {
       return JSON.stringify({ executed: true })
     }
 
-    const stranded = service.evaluate('/sessions/a.jsonl', { tabId, code: "'navigates-away'" })
+    const stranded = service.evaluate(SESSION_A, { tabId, code: "'navigates-away'" })
     await started.promise
     guest.startNavigation({ url: 'https://example.org/', isSameDocument: false, isMainFrame: true })
 
@@ -567,7 +574,7 @@ describe('AgentBrowserService', () => {
 
   it('keeps the tab usable after a navigation strands a page script', async () => {
     const { service, openAttached } = fixture()
-    const { guest, tabId } = await openAttached('/sessions/a.jsonl', 'https://example.com/')
+    const { guest, tabId } = await openAttached(SESSION_A, 'https://example.com/')
     const started = deferred<void>()
     guest.scriptResult = (code) => {
       if (code.includes('navigates-away')) {
@@ -577,19 +584,19 @@ describe('AgentBrowserService', () => {
       return JSON.stringify({ recovered: true })
     }
 
-    const stranded = service.evaluate('/sessions/a.jsonl', { tabId, code: "'navigates-away'" })
+    const stranded = service.evaluate(SESSION_A, { tabId, code: "'navigates-away'" })
     await started.promise
     guest.startNavigation({ url: 'https://example.org/', isSameDocument: false, isMainFrame: true })
     await expect(stranded).rejects.toThrow(/page navigated while this action was running/i)
 
     // Before the fix the per-tab queue stayed chained to the stranded promise,
     // so every later action on this tab hung instead of running.
-    await expect(service.evaluate('/sessions/a.jsonl', { tabId, code: "'after-navigation'" })).resolves.toEqual({ recovered: true })
+    await expect(service.evaluate(SESSION_A, { tabId, code: "'after-navigation'" })).resolves.toEqual({ recovered: true })
   })
 
   it('ignores same-document navigations while a page script runs', async () => {
     const { service, openAttached } = fixture()
-    const { guest, tabId } = await openAttached('/sessions/a.jsonl', 'https://example.com/')
+    const { guest, tabId } = await openAttached(SESSION_A, 'https://example.com/')
     const started = deferred<void>()
     const release = deferred<string>()
     guest.scriptResult = (code) => {
@@ -600,7 +607,7 @@ describe('AgentBrowserService', () => {
       return JSON.stringify({ executed: true })
     }
 
-    const running = service.evaluate('/sessions/a.jsonl', { tabId, code: "'same-document'" })
+    const running = service.evaluate(SESSION_A, { tabId, code: "'same-document'" })
     await started.promise
     // pushState and hash changes keep the execution context alive.
     guest.startNavigation({ url: 'https://example.com/#section', isSameDocument: true, isMainFrame: true })

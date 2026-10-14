@@ -29,6 +29,7 @@ function harnessStub(): Record<string, unknown> {
     sessions: { ...serviceStub(), onDidChange: vi.fn(() => () => undefined), requireSessionPath: vi.fn(async () => { throw new Error('denied') }) },
     agents: { ...serviceStub(), has: vi.fn(() => false) },
     catalog: serviceStub(),
+    plugins: { ...serviceStub(), authorizeReveal: vi.fn(() => { throw new Error('denied') }) },
   }
 }
 
@@ -36,19 +37,18 @@ describe('app:reveal-path authorization', () => {
   const expectedUrl = 'prime-work://app/'
 
   function revealHarness(overrides: { projects?: unknown; sessions?: unknown; plugins?: unknown }) {
+    const omp = harnessStub()
+    if (overrides.projects) omp.projects = overrides.projects
+    if (overrides.sessions) omp.sessions = { ...(omp.sessions as object), ...(overrides.sessions as object) }
+    if (overrides.plugins) omp.plugins = overrides.plugins
     const services = {
       meta: {},
-      projects: overrides.projects ?? serviceStub(),
-      sessions: { ...serviceStub(), onDidChange: vi.fn(() => vi.fn()), ...(overrides.sessions as object | undefined) },
-      agents: serviceStub(),
       terminals: serviceStub(),
       git: serviceStub(),
-      plugins: overrides.plugins ?? serviceStub(),
       settings: serviceStub(),
-      heartbeats: serviceStub(),
       schedules: { ...serviceStub(), onDidChange: vi.fn(() => vi.fn()) },
       browser: { ...serviceStub(), onDidChange: vi.fn(() => vi.fn()), onPointer: vi.fn(() => vi.fn()), onActivity: vi.fn(() => vi.fn()) },
-      omp: harnessStub(),
+      omp,
       pi: harnessStub(),
     }
     electronMocks.ipcMain.handle.mockClear()
@@ -128,16 +128,12 @@ describe('session change IPC', () => {
     }
     const services = {
       meta: {},
-      projects: serviceStub(),
-      sessions,
-      agents: serviceStub(),
       terminals: serviceStub(),
       git: serviceStub(),
-      plugins: serviceStub(),
       settings: serviceStub(),
       schedules: serviceStub(),
       browser: { ...serviceStub(), onDidChange: vi.fn(() => vi.fn()), onPointer: vi.fn(() => vi.fn()), onActivity: vi.fn(() => vi.fn()) },
-      omp: harnessStub(),
+      omp: { ...harnessStub(), sessions },
       pi: harnessStub(),
     }
     const expectedUrl = 'prime-work://app/'
@@ -192,25 +188,24 @@ describe('shell-facing app handlers', () => {
   let sender: { id: number; isDestroyed: () => boolean; getURL: () => string; mainFrame: { url: string } }
   let event: { sender: typeof sender; senderFrame: { url: string } }
 
-  function register(overrides: Record<string, unknown> = {}) {
+  function register(overrides: { projects?: unknown; sessions?: unknown; plugins?: unknown } = {}) {
     handlers = new Map()
     electronMocks.ipcMain.handle.mockImplementation((channel: string, listener: (event: unknown, ...args: unknown[]) => unknown) => {
       handlers.set(channel, listener)
     })
+    const omp = harnessStub()
+    if (overrides.projects) omp.projects = overrides.projects
+    if (overrides.sessions) omp.sessions = { ...(omp.sessions as object), ...(overrides.sessions as object) }
+    if (overrides.plugins) omp.plugins = overrides.plugins
     const services = {
       meta: {},
-      projects: serviceStub(),
-      sessions: { ...serviceStub(), onDidChange: vi.fn(() => () => undefined) },
-      agents: serviceStub(),
       terminals: serviceStub(),
       git: serviceStub(),
-      plugins: serviceStub(),
       settings: serviceStub(),
       schedules: serviceStub(),
       browser: { ...serviceStub(), onDidChange: vi.fn(() => vi.fn()), onPointer: vi.fn(() => vi.fn()), onActivity: vi.fn(() => vi.fn()) },
-      omp: harnessStub(),
+      omp,
       pi: harnessStub(),
-      ...overrides,
     }
     const registration = registerIpc(services as never, expectedUrl)
     registration.authorize(sender as never)
@@ -316,16 +311,12 @@ describe('IPC registration lifecycle', () => {
   function servicesWithUnsubscribe(unsubscribe: () => void): Record<string, unknown> {
     return {
       meta: {},
-      projects: serviceStub(),
-      sessions: { ...serviceStub(), onDidChange: vi.fn(() => unsubscribe) },
-      agents: serviceStub(),
       terminals: serviceStub(),
       git: serviceStub(),
-      plugins: serviceStub(),
       settings: serviceStub(),
       schedules: { ...serviceStub(), onDidChange: vi.fn(() => vi.fn()) },
       browser: { ...serviceStub(), onDidChange: vi.fn(() => vi.fn()), onPointer: vi.fn(() => vi.fn()), onActivity: vi.fn(() => vi.fn()) },
-      omp: harnessStub(),
+      omp: { ...harnessStub(), sessions: { ...serviceStub(), onDidChange: vi.fn(() => unsubscribe) } },
       pi: harnessStub(),
     }
   }

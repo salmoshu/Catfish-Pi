@@ -209,14 +209,9 @@ export interface TranscriptDialect {
   renderEntry?(entry: JsonRecord, safeId: string): TranscriptMessage | undefined
 }
 
-const primeTranscriptDialect: TranscriptDialect = {
-  isRenderable: (entry) => entry.type === 'message' || entry.type === 'compaction'
-    || (entry.type === 'custom_message' && entry.display === true),
-}
-
 export type TranscriptFileReader = (filePath: string, isStreaming: boolean) => Promise<TranscriptMessage[]>
 
-export function createTranscriptReader(dialect: TranscriptDialect = primeTranscriptDialect): TranscriptFileReader {
+export function createTranscriptReader(dialect: TranscriptDialect): TranscriptFileReader {
   return (filePath, isStreaming) => readTranscriptWithDialect(dialect, filePath, isStreaming)
 }
 
@@ -437,5 +432,3 @@ async function readTranscriptWithDialect(dialect: TranscriptDialect, filePath: s
   if (isStreaming && activeAssistant) { activeAssistant.streaming = true; activeAssistant.completedAt = undefined }
   return boundedTranscript(transcript)
 }
-
-export const readTranscript: TranscriptFileReader = createTranscriptReader()

@@ -168,8 +168,6 @@ describe('settings field ownership', () => {
       askUserEnabled: 'agent',
       browserEnabled: 'agent',
       computerUseEnabled: 'agent',
-      disabledProviders: 'providers',
-      disabledModels: 'providers',
       ompDisabledProviders: 'providers',
       ompDisabledModels: 'providers',
       piDisabledProviders: 'providers',

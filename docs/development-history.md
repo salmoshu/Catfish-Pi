@@ -1,5 +1,11 @@
 # Development history
 
+## 0.1.1 (upcoming) — 2026-10-14
+
+- The Prime Agent harness was removed: the `prime-agent` and `zeromq` dependencies were dropped, the vendored Prime runtime tarballs were deleted, and the Prime UI/settings surface was removed. Rationale: product focus on Pi and OMP; Prime Agent users should use Prime's own tooling. The vendored `@earendil-works/pi-ai` package (vendor/prime-agent-ai-0.7.0-gooeypi.1.tgz) remains as the shared model catalog, and `pnpm run vendor:verify-patches` now verifies only the pi-ai patch.
+- The original catfish icon artwork replaced the provisional GooeyPi assets.
+- pnpm is now the package manager, pinned via `package.json#packageManager` and resolved through Corepack.
+
 ## Catfish-Pi fork (2026-10-12)
 
 Catfish-Pi was forked from [GooeyPi](https://github.com/am-will/gooey-pi) at the v1.1.15 snapshot (last upstream commit 2026-09-02). The initial Catfish-Pi change renamed the product and repository identity, recorded provenance in `NOTICE`, preserved the upstream copyright in `LICENSE`, and added the harness minimum-version floor borrowed from apoc/omp-desktop (`electron/main/harness-version.ts`, documented in `docs/harness-discovery.md`). The sections below are GooeyPi's own upstream history, kept for context.

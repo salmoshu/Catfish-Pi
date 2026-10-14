@@ -83,7 +83,7 @@ describe('validation guide structure', () => {
       expect(existsSync(target), `missing documentation target: ${target}`).toBe(true)
     }
 
-    const mentionedScripts = [...validation.matchAll(/\bnpm run ([A-Za-z0-9:_-]+)/g)].map((match) => match[1])
+    const mentionedScripts = [...validation.matchAll(/\bpnpm run ([A-Za-z0-9:_-]+)/g)].map((match) => match[1])
     for (const script of new Set(mentionedScripts)) {
       expect(packageManifest.scripts, `missing package script mentioned by the guide: ${script}`).toHaveProperty(script)
     }
@@ -104,7 +104,7 @@ describe('validation guide structure', () => {
     const triggers = record(audit.on)
     expect(triggers).toHaveProperty('schedule')
     expect(triggers).toHaveProperty('workflow_dispatch')
-    expect(runCommands(record(audit.jobs).audit)).toContain('npm run audit:production')
+    expect(runCommands(record(audit.jobs).audit)).toContain('pnpm run audit:production')
   })
 
   test('links every workflow file from the guide', () => {

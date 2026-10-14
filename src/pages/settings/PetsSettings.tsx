@@ -27,12 +27,12 @@ export function PetsSettings({ settings, onUpdate, pets }: SettingsSectionProps 
     } finally { setLoading(false) }
   }, [pets])
   useEffect(() => { void refresh() }, [refresh])
-  const selected = useMemo(() => available.find((item) => item.id === settings.petId) ?? available.find((item) => item.id === 'orb') ?? BUILT_INS[0], [available, settings.petId])
+  const selected = useMemo(() => available.find((item) => item.id === settings.petId) ?? available.find((item) => item.id === 'catfish-pi') ?? BUILT_INS[1], [available, settings.petId])
   const codexCount = available.filter((item) => item.source === 'codex').length
 
   return (
     <>
-      <header><h1>Pets</h1><p>Choose a companion that reacts while OMP or Prime works.</p></header>
+      <header><h1>Pets</h1><p>Choose a companion that reacts while Pi or OMP works.</p></header>
       <section className="pet-hero">
         <div className="pet-hero__stage"><PetAvatar pet={selected} pets={pets} activity="speaking" size={Math.round(96 * settings.petSize / 100)} reduceMotion={settings.reduceMotion} /></div>
         <div><span className="pet-kicker"><Sparkles size={12} /> Active companion</span><h2>{selected.displayName}</h2><p>{selected.description}</p><small>Drag the pet around the workspace. It runs while moving, reviews while an agent works, and waves during voice mode.</small></div>

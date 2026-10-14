@@ -1,4 +1,4 @@
-import { accessSync, constants as fsConstants, readdirSync } from 'node:fs'
+import { accessSync, constants as fsConstants, readdirSync, readFileSync } from 'node:fs'
 import { access, readdir } from 'node:fs/promises'
 import { delimiter, posix, win32 } from 'node:path'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -265,14 +265,43 @@ export function prepareExecutableSpawn(
 ): ExecutableSpawnInvocation {
   const platform = options.platform ?? process.platform
   const childEnvironment = executableChildEnvironment(file, env, platform)
+  const shimBasename = win32.basename(file).toLowerCase()
   const descriptor = platform === 'win32'
-    ? Object.values(HARNESSES).find((harness) => harness.windowsNpmShim?.shim === win32.basename(file).toLowerCase())
+    ? Object.values(HARNESSES).find((harness) => harness.windowsNpmShim?.shim === shimBasename || harness.windowsBunShim?.shim === shimBasename)
     : undefined
-  if (!descriptor?.windowsNpmShim) {
+  if (!descriptor) {
     return { file, args: [...args], env: childEnvironment }
   }
 
   const canAccess = options.canAccess ?? canAccessPath
+
+  // Bun shims embed the runtime and package entrypoint as absolute paths
+  // (`@"<bun.exe>" "<cli.js>" %*`), and Bun-only packages cannot run under
+  // Node, so the validated spawn pair comes from parsing the shim file itself.
+  if (descriptor.windowsBunShim?.shim === shimBasename) {
+    const bunShim = descriptor.windowsBunShim
+    let shimContent: string
+    try {
+      shimContent = readFileSync(file, 'utf8')
+    } catch {
+      throw new Error(`The ${descriptor.agentName} Bun command shim could not be read`)
+    }
+    const match = /@?"([^"]+bun\.exe)"\s+"([^"]+\.js)"\s+%\*/i.exec(shimContent)
+    const runtime = match?.[1]
+    const bunEntrypoint = match?.[2]
+    const marker = bunShim.packageMarker.toLowerCase()
+    const valid = runtime && bunEntrypoint
+      && win32.isAbsolute(runtime) && win32.isAbsolute(bunEntrypoint)
+      && bunEntrypoint.toLowerCase().replace(/\//g, '\\').includes(marker)
+      && canAccess(runtime, fsConstants.X_OK) && canAccess(bunEntrypoint, fsConstants.F_OK)
+    if (!valid) throw new Error(`The ${descriptor.agentName} Bun command shim does not point to an official ${descriptor.agentName} installation`)
+    return { file: runtime, args: [bunEntrypoint, ...args], env: childEnvironment }
+  }
+
+  if (!descriptor.windowsNpmShim) {
+    return { file, args: [...args], env: childEnvironment }
+  }
+
   const entrypoint = win32.join(win32.dirname(file), 'node_modules', ...descriptor.windowsNpmShim.entrypoint)
   if (!canAccess(entrypoint, fsConstants.F_OK)) throw new Error(`The ${descriptor.agentName} npm command shim does not point to an official ${descriptor.agentName} installation`)
   const homeValue = options.home ?? childEnvironment.USERPROFILE
@@ -414,7 +443,8 @@ export function harnessExecutableCandidates(
 ): string[] {
   const pathApi = platform === 'win32' ? win32 : posix
   const executable = descriptor.executableName(platform)
-  const executableNames = platform === 'win32' && descriptor.windowsNpmShim ? [executable, descriptor.windowsNpmShim.shim] : [executable]
+  const shimNames = platform === 'win32' ? [descriptor.windowsNpmShim?.shim, descriptor.windowsBunShim?.shim].filter((name): name is string => Boolean(name)) : []
+  const executableNames = [executable, ...shimNames]
   const candidates: string[] = []
   if (configuredPath && isAbsolutePathForPlatform(configuredPath, platform)) candidates.push(configuredPath)
   const configured = env[descriptor.binaryEnvVar]
@@ -501,18 +531,6 @@ export type ExecutableSource = string | null | (() => string | null)
 /** Resolves a startup-fixed path or a live discovery-backed executable source. */
 export function resolveExecutable(source: ExecutableSource): string | null {
   return typeof source === 'function' ? source() : source
-}
-
-export function primeAgentExecutableName(platform = process.platform): string {
-  return HARNESSES.prime.executableName(platform)
-}
-
-export function primeAgentCandidates(env: NodeJS.ProcessEnv = process.env, platform = process.platform): string[] {
-  return harnessExecutableCandidates(HARNESSES.prime, env, platform)
-}
-
-export async function findPrimeAgent(): Promise<string | null> {
-  return findHarnessExecutable(HARNESSES.prime)
 }
 
 export function runProcess(file: string, args: readonly string[], options: {

@@ -3,26 +3,26 @@ import { spawnSync } from 'node:child_process'
 import { describeAuditEvaluation, evaluateAuditReport, readAuditExceptions } from './audit-exceptions.mjs'
 import { resolveCommandInvocation } from './lib.mjs'
 
-// npm audit exits non-zero whenever it reports anything at the requested level, so the status is
+// pnpm audit exits non-zero whenever it reports anything at the requested level, so the status is
 // no help here: the report itself decides, and only an unparseable report is a runner failure.
 function runProductionAudit() {
-  const invocation = resolveCommandInvocation('npm', ['audit', '--omit', 'dev', '--json'])
+  const invocation = resolveCommandInvocation('pnpm', ['audit', '--prod', '--json'])
   const result = spawnSync(invocation.file, invocation.args, { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, shell: invocation.shell })
   if (result.error) throw result.error
-  if (!result.stdout?.trim()) throw new Error(`npm audit produced no output${result.stderr ? `: ${result.stderr.trim()}` : ''}`)
+  if (!result.stdout?.trim()) throw new Error(`pnpm audit produced no output${result.stderr ? `: ${result.stderr.trim()}` : ''}`)
   let report
   try {
     report = JSON.parse(result.stdout)
   } catch {
-    throw new Error(`npm audit did not produce JSON${result.stderr ? `: ${result.stderr.trim()}` : ''}`)
+    throw new Error(`pnpm audit did not produce JSON${result.stderr ? `: ${result.stderr.trim()}` : ''}`)
   }
-  if (!report || typeof report !== 'object' || Array.isArray(report)) throw new Error('npm audit produced an invalid report shape')
+  if (!report || typeof report !== 'object' || Array.isArray(report)) throw new Error('pnpm audit produced an invalid report shape')
   if ('error' in report) {
     const error = report.error
     const detail = error && typeof error === 'object' && 'summary' in error ? error.summary : String(error)
-    throw new Error(`npm audit failed: ${detail}`)
+    throw new Error(`pnpm audit failed: ${detail}`)
   }
-  if (!Object.hasOwn(report, 'vulnerabilities')) throw new Error('npm audit report has no vulnerabilities section')
+  if (!Object.hasOwn(report, 'advisories')) throw new Error('pnpm audit report has no advisories section')
   return report
 }
 

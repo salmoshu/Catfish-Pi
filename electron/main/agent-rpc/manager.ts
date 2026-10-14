@@ -5,14 +5,14 @@ import { resolveExecutable, type ExecutableSource } from '../process-utils'
 import { canonicalSessionPath } from '../session-paths'
 import { isPathWithin, isRecord, rejectUnknownKeys, requireId, requireRecord, requireString } from '../validation'
 import { isThinkingLevel, validateRpcCommand } from './command-schema'
-import { PRIME_RPC_ADAPTER, type HarnessRpcAdapter } from './harness-adapter'
+import { type HarnessRpcAdapter } from './harness-adapter'
 import { RpcRuntime } from './runtime'
 import type { RpcObject } from './types'
 import type { WorkspaceUseLease, WorkspaceUseOwner } from '../repository-use-gate'
 
 /**
- * Structural slice of the provider catalog the manager needs; PrimeProviderService
- * satisfies it today and a future OMP model catalog can be injected in its place.
+ * Structural slice of the provider catalog the manager needs; the per-harness
+ * model catalog services (OMP, pi) satisfy it.
  */
 export interface ProviderCatalog {
   requireAvailableModel(rawKey: unknown, disabledProviders?: ReadonlySet<string>, disabledModels?: ReadonlySet<string>): Promise<PrimeModelDescriptor>
@@ -42,9 +42,9 @@ export class AgentRpcManager {
     private readonly executable: ExecutableSource,
     private readonly authorizeCwd: (cwd: string) => Promise<string>,
     private readonly validateSessionPath: (path: string) => Promise<string>,
-    private readonly providers?: ProviderCatalog,
-    private readonly disabledProviders: () => ReadonlySet<string> = () => new Set(),
-    private readonly adapter: HarnessRpcAdapter = PRIME_RPC_ADAPTER,
+    private readonly providers: ProviderCatalog,
+    private readonly disabledProviders: () => ReadonlySet<string>,
+    private readonly adapter: HarnessRpcAdapter,
     /** Approval-mode override consumed only by harness arg builders that support it (OMP). */
     private readonly approvalMode: () => string | undefined = () => undefined,
   ) {}
@@ -240,7 +240,7 @@ export class AgentRpcManager {
     }
     const response = await runtime.command(translated)
     if (command.type === 'steer' || command.type === 'follow_up') {
-      // OMP reports only queuedMessageCount, while Prime reports the full
+      // OMP reports only queuedMessageCount; other harnesses report the full
       // scheduler snapshot. Refresh after admission so both shapes reach the
       // renderer before a queued row can appear to vanish.
       try {

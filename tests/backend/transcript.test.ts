@@ -3,9 +3,11 @@ import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { readSessionMetadata } from '../../electron/main/sessions/metadata'
-import { readTranscript } from '../../electron/main/sessions/transcript'
+import { createPiSessionMetadataReader, readPiTranscript } from '../../electron/main/sessions/pi'
 import { configureCatfishPiAgentMessageSigning, encodeCatfishPiAgentMessage, loadOrCreateCatfishPiAgentMessageKey, parseCatfishPiAgentMessage } from '../../electron/main/collaboration/message-envelope'
+
+const readSessionMetadata = createPiSessionMetadataReader()
+const readTranscript = readPiTranscript
 
 const dirs: string[] = []
 configureCatfishPiAgentMessageSigning(Buffer.alloc(32, 7))
@@ -85,7 +87,7 @@ describe('Catfish-Pi agent messages', () => {
       version: 1,
       from_session_id: 'legacy-source',
       from_title: 'Legacy planner title',
-      from_harness: 'prime',
+      from_harness: 'pi',
       reply_with: 'session_send',
       nonce: '00000000-0000-4000-8000-000000000000',
       sent_at: '2026-08-13T12:00:00.000Z',
@@ -106,7 +108,7 @@ describe('Catfish-Pi agent messages', () => {
     expect(parseCatfishPiAgentMessage(envelope)).toEqual({
       fromSessionId: 'legacy-source',
       fromTitle: 'Legacy planner title',
-      fromHarness: 'prime',
+      fromHarness: 'pi',
       text,
     })
   })

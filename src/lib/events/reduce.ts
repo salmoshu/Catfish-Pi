@@ -342,7 +342,7 @@ export function replayPrimeEvents(
       continue
     }
     if (type === 'extension_error' || type === 'error' || type === 'transport_error') {
-      const text = string(raw.error) ?? string(raw.message) ?? 'Prime encountered an error.'
+      const text = string(raw.error) ?? string(raw.message) ?? 'The agent encountered an error.'
       finalizeStreaming(Date.now(), false)
       if (next.at(-1)?.role === 'system') continue
       copyTranscript()
@@ -354,7 +354,7 @@ export function replayPrimeEvents(
       if (raw.expected === true || next.at(-1)?.role === 'system') continue
       const reason = raw.code !== null && raw.code !== undefined ? `exit code ${String(raw.code)}` : string(raw.signal) ?? 'an unknown error'
       copyTranscript()
-      // Harness-neutral: this reducer serves both Prime Agent and OMP events.
+      // Harness-neutral: this reducer serves both Pi and OMP events.
       next.push({ id: nextTranscriptId('error'), role: 'system', timestamp: Date.now(), parts: [withPartId({ type: 'text', text: `The agent stopped unexpectedly (${reason}). Send the message again to restart it.` })] })
     }
   }

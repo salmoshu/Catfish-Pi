@@ -1,11 +1,11 @@
 {
-  "comment": "Advisories that npm audit --omit dev may report without failing the build. Every entry needs an expiry so an unfixable advisory cannot silently become permanent; see docs/security.md, 'Dependency pinning and supply chain'.",
+  "comment": "Advisories that pnpm audit --prod may report without failing the build. Every entry needs an expiry so an unfixable advisory cannot silently become permanent; see docs/security.md, 'Dependency pinning and supply chain'.",
   "exceptions": [
     {
       "advisory": "GHSA-c475-qrg2-pj4r",
       "package": "basic-ftp",
       "expires": "2027-01-11",
-      "reason": "No patched release exists (all versions <= 6.2.0 affected). Reachable only via the vendored prime-agent proxy chain (pac-proxy-agent -> get-uri -> basic-ftp) when a proxy is configured with an ftp:// URL, which Catfish-Pi never sets; exploitation also requires a malicious FTP server answering Client.list(). Track upstream and remove once a fixed basic-ftp ships."
+      "reason": "No patched release exists (all versions <= 6.2.0 affected). Reachable only via the vendored @earendil-works/pi-ai proxy chain (pac-proxy-agent -> get-uri -> basic-ftp) when a proxy is configured with an ftp:// URL, which Catfish-Pi never sets; exploitation also requires a malicious FTP server answering Client.list(). Track upstream and remove once a fixed basic-ftp ships."
     }
   ]
 }

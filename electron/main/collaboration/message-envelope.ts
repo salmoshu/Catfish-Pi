@@ -6,7 +6,7 @@ import { isRecord } from '../validation'
 
 const BEGIN = '===== BEGIN CATFISHPI AGENT MESSAGE ====='
 const END = '===== END CATFISHPI AGENT MESSAGE ====='
-const HARNESSES = new Set<HarnessId>(['prime', 'omp', 'pi'])
+const HARNESSES = new Set<HarnessId>(['omp', 'pi'])
 const KEY_BYTES = 32
 let signingKey: Buffer | undefined
 

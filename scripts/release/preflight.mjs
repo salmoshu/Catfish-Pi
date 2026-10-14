@@ -5,10 +5,10 @@ try {
   const toolchainOnly = process.argv.slice(2).includes('--toolchain-only')
   const versions = assertSupportedToolchain()
   if (toolchainOnly) {
-    console.log(`Release toolchain preflight passed: Node ${versions.node} and npm ${versions.npm}.`)
+    console.log(`Release toolchain preflight passed: Node ${versions.node} and pnpm ${versions.pnpm}.`)
   } else {
     validateReleaseCredentials(process.env)
-    console.log(`Release preflight passed: Node ${versions.node}, npm ${versions.npm}, Developer ID, Team ID, and notarization credentials are present.`)
+    console.log(`Release preflight passed: Node ${versions.node}, pnpm ${versions.pnpm}, Developer ID, Team ID, and notarization credentials are present.`)
   }
 } catch (error) {
   console.error(`Release preflight failed: ${error instanceof Error ? error.message : String(error)}`)

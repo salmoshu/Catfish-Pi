@@ -2,7 +2,6 @@ import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ExtensionAPI } from 'prime-agent'
 import { EXTENSION_INJECTIONS, SHIPPED_EXTENSION_FILENAMES, type ExtensionInjection } from '../../electron/main/extension-manifest'
 import type { OmpExtensionApi } from '../../assets/extensions/omp-work-browser'
 import type { PiFastModeExtensionApi } from '../../assets/extensions/pi-work-fast-mode'
@@ -14,25 +13,7 @@ interface Fixture {
   registrations: Registration[]
 }
 
-type PrimeFixtureApi = Pick<ExtensionAPI, 'registerTool'>
 type PiFixtureApi = PiFastModeExtensionApi & Omit<OmpExtensionApi, 'typebox'>
-
-function primeHost(): Fixture {
-  const registrations: Registration[] = []
-  const target: PrimeFixtureApi = {
-    registerTool: (tool) => { registrations.push({ kind: 'tool', name: tool.name }) },
-  }
-  const api = new Proxy(target, {
-    get(object, property, receiver) {
-      if (typeof property === 'symbol' || property === 'then' || property === 'constructor') return Reflect.get(object, property, receiver)
-      // Model the absent optional shim that shipped files probe before using their dynamic-import fallback.
-      if (property === 'typebox') return undefined
-      if (!(property in object)) throw new Error(`Prime fixture does not inject ${String(property)}`)
-      return Reflect.get(object, property, receiver)
-    },
-  })
-  return { api, registrations }
-}
 
 function ompHost(): Fixture {
   const registrations: Registration[] = []
@@ -81,15 +62,11 @@ function piHost(): Fixture {
 }
 
 const fixtureFactories = {
-  prime: primeHost,
   omp: ompHost,
   pi: piHost,
 }
 
 const expectedRegistrations: Record<string, Registration[]> = {
-  'prime-work-browser.ts': [
-    ...['terminal_read', 'browser_tabs', 'browser_navigate', 'browser_screenshot', 'browser_read_page', 'browser_click', 'browser_type', 'browser_press_key', 'browser_scroll', 'browser_evaluate'].map((name) => ({ kind: 'tool' as const, name })),
-  ],
   'omp-work-browser.ts': [
     ...['terminal_read', 'browser_tabs', 'browser_navigate', 'browser_screenshot', 'browser_read_page', 'browser_click', 'browser_type', 'browser_press_key', 'browser_scroll', 'browser_evaluate'].map((name) => ({ kind: 'tool' as const, name })),
   ],
@@ -161,7 +138,6 @@ describe('shipped extension contracts', () => {
       api.typebox!.Type.Object({})
     }
     expect(() => badExtension(ompHost().api as OmpExtensionApi)).not.toThrow()
-    expect(() => badExtension(primeHost().api as OmpExtensionApi)).toThrow()
     expect(() => badExtension(piHost().api as OmpExtensionApi)).toThrow()
   })
 

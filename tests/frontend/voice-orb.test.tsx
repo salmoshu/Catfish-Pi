@@ -65,7 +65,7 @@ describe('realtime voice surface', () => {
   it('prefers the live git branch for the session toolbar pill', () => {
     const project: ProjectRecord = {
       id: 'inferred-project',
-      harness: 'prime',
+      harness: 'pi',
       name: 'Inferred project',
       path: '/project',
       folders: ['/project'],
@@ -137,19 +137,19 @@ describe('realtime voice surface', () => {
   })
 
   it('executes a start_task call and reports the started task to the workspace', async () => {
-    const task = { projectId: 'p1', projectName: 'Prime', harness: 'prime' as const, runtimeId: 'r1', sessionFile: '/tmp/session.jsonl' }
+    const task = { projectId: 'p1', projectName: 'Pi', harness: 'pi' as const, runtimeId: 'r1', sessionFile: '/tmp/session.jsonl' }
     const executeTool = vi.fn(async () => ({ output: '{"started":true}', task }))
     const onTaskStarted = vi.fn(async () => undefined)
     const voice = { createRealtimeCall: vi.fn(async () => 'v=0\r\no=test-answer-value'), executeTool } as unknown as PrimeWorkApi['voice']
-    await act(async () => root.render(<VoiceOrb voice={voice} harness="prime" onClose={vi.fn()} onTaskStarted={onTaskStarted} />))
+    await act(async () => root.render(<VoiceOrb voice={voice} harness="pi" onClose={vi.fn()} onTaskStarted={onTaskStarted} />))
     await act(async () => {
       FakePeer.latest.channel.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ type: 'response.function_call_arguments.done', call_id: 'call-1', name: 'start_task', arguments: JSON.stringify({ project_id: 'p1', prompt: 'Build it', model: 'openai-codex/gpt-5.6-sol', reasoning: 'high' }) }) }))
       await Promise.resolve()
     })
-    expect(executeTool).toHaveBeenCalledWith({ name: 'start_task', arguments: { project_id: 'p1', prompt: 'Build it', model: 'openai-codex/gpt-5.6-sol', reasoning: 'high' } }, 'prime')
+    expect(executeTool).toHaveBeenCalledWith({ name: 'start_task', arguments: { project_id: 'p1', prompt: 'Build it', model: 'openai-codex/gpt-5.6-sol', reasoning: 'high' } }, 'pi')
     expect(onTaskStarted).toHaveBeenCalledWith(task)
     expect(container.textContent).toContain('Task started')
-    expect(container.textContent).toContain('Prime · Prime')
+    expect(container.textContent).toContain('Pi · Pi')
     expect(container.textContent).toContain('Opened in the sidebar')
   })
 
@@ -167,7 +167,7 @@ describe('realtime voice surface', () => {
   it('waits for the active response to finish before continuing after a tool call', async () => {
     const executeTool = vi.fn(async () => ({ output: '{"projects":[]}' }))
     const voice = { createRealtimeCall: vi.fn(async () => 'v=0\r\no=test-answer-value'), executeTool } as unknown as PrimeWorkApi['voice']
-    await act(async () => root.render(<VoiceOrb voice={voice} harness="prime" onClose={vi.fn()} onTaskStarted={vi.fn()} />))
+    await act(async () => root.render(<VoiceOrb voice={voice} harness="pi" onClose={vi.fn()} onTaskStarted={vi.fn()} />))
     await act(async () => {
       FakePeer.latest.channel.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ type: 'response.created' }) }))
       FakePeer.latest.channel.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ type: 'response.function_call_arguments.done', call_id: 'call-projects', name: 'list_projects', arguments: '{}' }) }))
@@ -186,7 +186,7 @@ describe('realtime voice surface', () => {
     const resolutions = new Map<string, (result: { output: string }) => void>()
     const executeTool = vi.fn((request: { name: string }) => new Promise<{ output: string }>((resolve) => resolutions.set(request.name, resolve)))
     const voice = { createRealtimeCall: vi.fn(async () => 'v=0\r\no=test-answer-value'), executeTool } as unknown as PrimeWorkApi['voice']
-    await act(async () => root.render(<VoiceOrb voice={voice} harness="prime" onClose={vi.fn()} onTaskStarted={vi.fn()} />))
+    await act(async () => root.render(<VoiceOrb voice={voice} harness="pi" onClose={vi.fn()} onTaskStarted={vi.fn()} />))
     await act(async () => {
       FakePeer.latest.channel.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ type: 'response.created' }) }))
       FakePeer.latest.channel.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ type: 'response.function_call_arguments.done', call_id: 'call-projects', name: 'list_projects', arguments: '{}' }) }))
@@ -209,7 +209,7 @@ describe('realtime voice surface', () => {
     const executeTool = vi.fn(async () => ({ output: '{"projects":[]}' }))
     const voice = { createRealtimeCall: vi.fn(async () => 'v=0\r\no=test-answer-value'), executeTool } as unknown as PrimeWorkApi['voice']
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    await act(async () => root.render(<VoiceOrb voice={voice} harness="prime" onClose={vi.fn()} onTaskStarted={vi.fn()} />))
+    await act(async () => root.render(<VoiceOrb voice={voice} harness="pi" onClose={vi.fn()} onTaskStarted={vi.fn()} />))
     await act(async () => {
       FakePeer.latest.channel.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ type: 'response.function_call_arguments.done', call_id: 'call-projects', name: 'list_projects', arguments: '{}' }) }))
       await Promise.resolve()
@@ -241,7 +241,7 @@ describe('realtime voice surface', () => {
       executeTool: vi.fn(() => new Promise<{ output: string }>((resolve) => { resolveOld = resolve })),
     } as unknown as PrimeWorkApi['voice']
     const onTaskStarted = vi.fn(async () => undefined)
-    await act(async () => root.render(<VoiceOrb voice={oldVoice} harness="prime" onClose={vi.fn()} onTaskStarted={onTaskStarted} />))
+    await act(async () => root.render(<VoiceOrb voice={oldVoice} harness="pi" onClose={vi.fn()} onTaskStarted={onTaskStarted} />))
     const oldChannel = FakePeer.latest.channel
     await act(async () => {
       oldChannel.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ type: 'response.function_call_arguments.done', call_id: 'old-call', name: 'list_projects', arguments: '{}' }) }))
@@ -252,7 +252,7 @@ describe('realtime voice surface', () => {
       createRealtimeCall: vi.fn(async () => 'v=0\r\no=test-answer-value'),
       executeTool: vi.fn((request: { name: string }) => new Promise<{ output: string }>((resolve) => resolutions.set(request.name, resolve))),
     } as unknown as PrimeWorkApi['voice']
-    await act(async () => root.render(<VoiceOrb voice={newVoice} harness="prime" onClose={vi.fn()} onTaskStarted={onTaskStarted} />))
+    await act(async () => root.render(<VoiceOrb voice={newVoice} harness="pi" onClose={vi.fn()} onTaskStarted={onTaskStarted} />))
     const newChannel = FakePeer.latest.channel
     await act(async () => {
       newChannel.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ type: 'response.created' }) }))
@@ -276,7 +276,7 @@ describe('realtime voice surface', () => {
   it('shows details from realtime errors', async () => {
     const voice = { createRealtimeCall: vi.fn(async () => 'v=0\r\no=test-answer-value'), executeTool: vi.fn() } as unknown as PrimeWorkApi['voice']
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    await act(async () => root.render(<VoiceOrb voice={voice} harness="prime" onClose={vi.fn()} onTaskStarted={vi.fn()} />))
+    await act(async () => root.render(<VoiceOrb voice={voice} harness="pi" onClose={vi.fn()} onTaskStarted={vi.fn()} />))
     await act(async () => {
       FakePeer.latest.channel.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', code: 'conversation_already_has_active_response', message: 'A response is already in progress.', param: 'response', event_id: 'evt-123' } }) }))
     })
@@ -290,7 +290,7 @@ describe('realtime voice surface', () => {
     const onClose = vi.fn()
     const onTaskStarted = vi.fn(async () => undefined)
     await act(async () => root.render(<VoiceOrb voice={voice} harness="omp" onClose={onClose} onTaskStarted={onTaskStarted} />))
-    await act(async () => root.render(<VoiceOrb voice={voice} harness="prime" onClose={onClose} onTaskStarted={onTaskStarted} />))
+    await act(async () => root.render(<VoiceOrb voice={voice} harness="pi" onClose={onClose} onTaskStarted={onTaskStarted} />))
     await act(async () => {
       FakePeer.latest.channel.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ type: 'response.function_call_arguments.done', call_id: 'call-context', name: 'get_local_context', arguments: '{}' }) }))
       await Promise.resolve()

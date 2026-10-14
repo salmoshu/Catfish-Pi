@@ -5,10 +5,8 @@ import { pathToFileURL } from 'node:url'
 
 const SEMANTIC_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 
-export function assertReleaseTag(tag, packageVersion, lockVersion, lockRootVersion = lockVersion) {
+export function assertReleaseTag(tag, packageVersion) {
   if (!SEMANTIC_VERSION.test(packageVersion)) throw new Error(`package.json version is not a supported semantic version: ${packageVersion}`)
-  if (lockVersion !== packageVersion) throw new Error(`package-lock.json version ${lockVersion} does not match package.json version ${packageVersion}`)
-  if (lockRootVersion !== packageVersion) throw new Error(`package-lock.json root package version ${lockRootVersion} does not match package.json version ${packageVersion}`)
   const expectedTag = `v${packageVersion}`
   if (tag !== expectedTag) throw new Error(`Release tag ${tag || '<empty>'} must exactly match package.json version (${expectedTag})`)
   return { tag, version: packageVersion }
@@ -16,8 +14,7 @@ export function assertReleaseTag(tag, packageVersion, lockVersion, lockRootVersi
 
 export function validateReleaseTag(tag, projectDirectory = process.cwd()) {
   const packageJson = JSON.parse(readFileSync(resolve(projectDirectory, 'package.json'), 'utf8'))
-  const packageLock = JSON.parse(readFileSync(resolve(projectDirectory, 'package-lock.json'), 'utf8'))
-  return assertReleaseTag(tag, packageJson.version, packageLock.version, packageLock.packages?.['']?.version)
+  return assertReleaseTag(tag, packageJson.version)
 }
 
 export function invokedAsScript() {

@@ -186,5 +186,4 @@
 .summary-automation-list strong { overflow: hidden; font-size: 0.72rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .summary-automation-list small { color: var(--text-tertiary); font-size: 0.64rem; text-transform: capitalize; }
 .summary-automation-icon { width: 1.75rem; height: 1.75rem; display: grid; place-items: center; flex: 0 0 auto; border-radius: 0.45rem; color: var(--prime); background: var(--prime-soft); }
-.summary-automation-icon.is-heartbeat { color: var(--success); background: var(--success-soft); }
 .summary-automation-list > .summary-automation-more { min-height: 2.25rem; justify-content: center; color: var(--text-secondary); font-size: 0.68rem; }

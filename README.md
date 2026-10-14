@@ -2,13 +2,13 @@
 
 > **Provenance / 项目来源**: Catfish-Pi is derived from [GooeyPi](https://github.com/am-will/gooey-pi) (MIT, © GooeyPi contributors). 本项目源自 GooeyPi，在此向其作者与贡献者致谢。The upstream copyright and license are preserved in [LICENSE](LICENSE), and third-party borrowing credits are recorded in [NOTICE](NOTICE).
 
-Catfish-Pi is a desktop workspace for [Pi](https://pi.dev/), [OMP](https://github.com/can1357/oh-my-pi), and [Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent). It gives all three coding agents the same friendly interface on macOS, Linux, and Windows while leaving each harness in charge of its own models, logins, and saved sessions.
+Catfish-Pi is a desktop workspace for [Pi](https://pi.dev/) and [OMP](https://github.com/can1357/oh-my-pi) (forked from [GooeyPi](https://github.com/am-will/gooey-pi)). It gives both coding agents the same friendly interface on macOS, Linux, and Windows while leaving each harness in charge of its own models, logins, and saved sessions.
 
 <img width="2234" height="1332" alt="Catfish-Pi desktop workspace" src="docs/images/readme-hero.png" />
 
-## Three harnesses, one workspace
+## Two harnesses, one workspace
 
-Use the switcher in the top-left corner to move between Pi Work, OMP Work, and Prime Work. Catfish-Pi detects the harnesses installed on your computer and shows the ones that are ready. You can refresh detection or set a custom executable path in Settings.
+Use the switcher in the top-left corner to move between Pi Work and OMP Work. Catfish-Pi detects the harnesses installed on your computer and shows the ones that are ready. You can refresh detection or set a custom executable path in Settings.
 
 Each harness keeps its own projects, sessions, model list, provider visibility, and running work. Switching harnesses changes the workspace without stopping work already running in another one.
 
@@ -16,7 +16,6 @@ You only need one harness to get started:
 
 - [Pi](https://pi.dev/) is the base coding-agent harness in the Pi family.
 - [OMP](https://github.com/can1357/oh-my-pi) adds its own plugins, commands, and approval controls.
-- [Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent) adds Prime's provider integrations and native heartbeats.
 
 ## What you can do
 
@@ -55,7 +54,6 @@ You only need one harness to get started:
 - Create one-time or recurring schedules for the active harness.
 - Pick the project or existing session, model, reasoning level, timezone, and Fast mode.
 - Run a schedule immediately, pause or resume it, and inspect the result and run history.
-- Manage Prime heartbeats alongside Catfish-Pi schedules when Prime Agent exposes them.
 - On macOS, opt in under **Settings → General** to keep scheduled work running from the menu bar after closing the window, and optionally launch Catfish-Pi in the background at login. The packaged app also accepts `--background` to start without opening its window.
 
 ### Add capabilities
@@ -84,7 +82,7 @@ Ask User and computer control are off by default. You can enable, disable, or re
 
 ## Get started
 
-1. Install Pi, OMP, Prime Agent, or any combination of the three.
+1. Install Pi, OMP, or both.
 2. Sign in or configure a model provider through each harness's own CLI.
 3. Download Catfish-Pi from [GitHub Releases](https://github.com/salmoshu/Catfish-Pi/releases), or run it from source.
 4. Add a project folder and start a session.
@@ -97,36 +95,43 @@ Harness provider credentials stay with the harness. Optional voice keys are encr
 
 ## Run from source
 
-You will need Node.js 24.15.0 or newer and npm 12.0.2 or newer. The repository pins Node.js 24.15.0 in `.nvmrc`; with [nvm](https://github.com/nvm-sh/nvm), you can select it with:
+You will need Node.js 24.15.0 or newer and pnpm 12.11.2 or newer. The repository pins Node.js 24.15.0 in `.nvmrc` and pnpm in `package.json#packageManager`; with [nvm](https://github.com/nvm-sh/nvm) and Corepack, you can select both with:
 
 ```bash
 nvm install && nvm use
-npm run toolchain:bootstrap
+corepack enable
+corepack install
 ```
 
-The bootstrap command verifies the exact size and SHA-512 of the checked-in npm archive, then installs it offline with install-time lifecycle scripts disabled into the invoked npm's configured global prefix, verifies the installed CLI and both tool versions against `package.json` and `.nvmrc`, and makes its shim available to subsequent GitHub Actions steps before dependencies are installed.
+Corepack resolves the exact `packageManager`-pinned pnpm, so every checkout and CI job uses the same package manager before dependencies are installed.
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 If `node_modules/electron/dist` is missing after installation, fetch Electron's platform binary before starting the app:
 
 ```bash
 node node_modules/electron/install.js
-npm run dev
+pnpm run dev
 ```
 
-`npm install --ignore-scripts` skips both Electron's platform download and the native dependency rebuild, so it is not enough on its own for running Catfish-Pi from source. If you used it, the recovery sequence below runs those two steps explicitly.
+`pnpm install --ignore-scripts` skips both Electron's platform download and the native dependency rebuild, so it is not enough on its own for running Catfish-Pi from source. If you used it, the recovery sequence below runs those two steps explicitly.
 
-`node-pty` is a native dependency. If Electron cannot rebuild it with your default Python environment, point npm at a Python installation with the required build tools:
+`node-pty` is a native dependency. If Electron cannot rebuild it with your default Python environment, point node-gyp at a Python installation with the required build tools:
 
 ```bash
 export npm_config_python=/path/to/python3
-npm install --ignore-scripts
+pnpm install --ignore-scripts
 node node_modules/electron/install.js
-npx electron-builder install-app-deps
+pnpm exec electron-builder install-app-deps
+```
+
+On Windows, set the variable in PowerShell instead:
+
+```powershell
+$env:npm_config_python = 'C:\path\to\python.exe'
 ```
 
 ## Keyboard shortcuts
@@ -150,7 +155,7 @@ The Queue and Steer shortcuts can be swapped in **Settings → Harness → Messa
 
 ## Local data and safety
 
-Catfish-Pi is built around local projects and local harness sessions. It does not rewrite session history or take ownership of Pi, OMP, or Prime Agent credentials.
+Catfish-Pi is built around local projects and local harness sessions. It does not rewrite session history or take ownership of Pi or OMP credentials.
 
 Remote pages open in a separate browser profile with Node access disabled. Project paths and desktop actions are checked in the main process, and third-party capabilities still run with your operating-system permissions. Review packages, commands, MCP servers, and projects before allowing them to act.
 
@@ -161,11 +166,11 @@ For suspected vulnerabilities, follow the [security policy](.github/SECURITY.md)
 Run these before submitting a code change:
 
 ```bash
-npm run typecheck
-npm run check
-npm test
-npm run test:e2e
-npm run build
+pnpm run typecheck
+pnpm run check
+pnpm test
+pnpm run test:e2e
+pnpm run build
 ```
 
 See the [validation guide](docs/validation.md) for the source-of-truth checks and reproducible commands.
@@ -173,9 +178,9 @@ See the [validation guide](docs/validation.md) for the source-of-truth checks an
 To make an installable local QA build, run the command for your operating system:
 
 ```bash
-npm run package:mac:local-qa
-npm run package:linux:local-qa
-npm run package:win:local-qa
+pnpm run package:mac:local-qa
+pnpm run package:linux:local-qa
+pnpm run package:win:local-qa
 ```
 
 Build packages on their target operating system so native dependencies match the release.

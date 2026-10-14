@@ -275,7 +275,7 @@ export function ExtensionUiModal({ request, onRespond, platform = 'darwin' }: Ex
       ) : null}
       {request.method === 'select' ? (
         <div className="extension-question">
-          <p className="modal-intro">Choose an option to let Prime continue.</p>
+          <p className="modal-intro">Choose an option to let the agent continue.</p>
           <div className="extension-question__options" role="listbox" aria-label={request.title}>
             {request.options.map((option, index) => (
               <button

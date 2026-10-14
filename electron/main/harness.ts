@@ -21,6 +21,14 @@ export interface HarnessDescriptor {
   candidateDirs: (platform: NodeJS.Platform, home: string, env: NodeJS.ProcessEnv) => string[]
   /** Official npm `.cmd` shim on Windows and the package entrypoint below `<shim dir>\node_modules`. */
   windowsNpmShim?: { shim: string; entrypoint: readonly string[] }
+  /**
+   * Bun-generated `.cmd` shim on Windows (`@"<bun.exe>" "<package cli.js>" %*`).
+   * Bun shims embed absolute paths instead of the npm `<shim dir>\node_modules`
+   * layout, and the package requires the Bun runtime, so the shim file itself is
+   * parsed for its runtime/entrypoint pair (see process-utils).
+   * `packageMarker` is a required path segment of the embedded entrypoint.
+   */
+  windowsBunShim?: { shim: string; packageMarker: string }
   /** Oldest harness release this app validated its protocol against; older versions are refused (see harness-version.ts). */
   minimumVersion?: readonly [number, number, number]
   /** Command shown to users when a harness is below `minimumVersion`. */
@@ -30,20 +38,6 @@ export interface HarnessDescriptor {
 }
 
 export const HARNESSES: Record<HarnessId, HarnessDescriptor> = {
-  prime: {
-    id: 'prime',
-    productName: 'Prime Work',
-    agentName: 'Prime Agent',
-    executableName: (platform) => platform === 'win32' ? 'prime-agent.exe' : 'prime-agent',
-    binaryEnvVar: 'PRIME_AGENT_BINARY',
-    bundledResourceDirs: [['agent'], ['agent', 'bin']],
-    candidateDirs: (platform, home, env) => platform === 'win32' ? [] : [
-      join(env.XDG_DATA_HOME ?? join(home, '.local', 'share'), 'prime-agent-node', 'current', 'bin'),
-    ],
-    windowsNpmShim: { shim: 'prime-agent.cmd', entrypoint: ['prime-agent', 'dist', 'bundle', 'cli.js'] },
-    agentDir: (home) => join(home, '.prime', 'agent'),
-    sessionRoot: (home) => join(home, '.prime', 'agent', 'sessions'),
-  },
   omp: {
     id: 'omp',
     productName: 'OMP Work',
@@ -55,6 +49,7 @@ export const HARNESSES: Record<HarnessId, HarnessDescriptor> = {
       if (platform === 'win32') return env.LOCALAPPDATA ? [win32.join(env.LOCALAPPDATA, 'omp')] : []
       return env.PI_INSTALL_DIR ? [env.PI_INSTALL_DIR] : []
     },
+    windowsBunShim: { shim: 'omp.cmd', packageMarker: '@oh-my-pi' },
     minimumVersion: [17, 2, 11],
     updateCommand: 'omp update',
     agentDir: (home) => join(home, '.omp', 'agent'),

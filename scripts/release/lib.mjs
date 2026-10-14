@@ -1,7 +1,8 @@
 import { spawnSync } from 'node:child_process'
 import { accessSync, constants, existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join, posix, win32 } from 'node:path'
+import { homedir } from 'node:os'
+import { join, posix, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { SHIPPED_EXTENSION_FILENAMES } from '../../electron/main/extension-manifest.ts'
 
@@ -17,10 +18,22 @@ export function validateAbsoluteSingleLinePath(value, label, platform = process.
   return value
 }
 
+function corepackHomeDirectory(platform = process.platform, env = process.env) {
+  if (env.COREPACK_HOME) return env.COREPACK_HOME
+  if (platform === 'win32') return env.LOCALAPPDATA ? join(env.LOCALAPPDATA, 'node', 'corepack') : join(homedir(), 'AppData', 'Local', 'node', 'corepack')
+  return join(homedir(), '.cache', 'node', 'corepack')
+}
+
+function resolveCorepackPnpmCli(platform = process.platform, env = process.env) {
+  const { pnpm } = readRepositoryToolchain()
+  const candidates = [join(corepackHomeDirectory(platform, env), 'v1', 'pnpm', pnpm, 'bin', 'pnpm.mjs'), join(corepackHomeDirectory(platform, env), 'v1', 'pnpm', pnpm, 'dist', 'pnpm.cjs')]
+  return candidates.find((candidate) => existsSync(candidate))
+}
+
 /**
  * Resolves a release-script command to a spawn invocation that works on every platform.
- * Windows npm and npx ship as .cmd shims Node refuses to spawn without a shell, so known
- * commands run their JavaScript entrypoint directly under the current Node executable.
+ * Windows package-manager shims are .cmd files Node refuses to spawn without a shell, so
+ * pnpm runs its JavaScript entrypoint directly under the current Node executable.
  */
 export function resolveCommandInvocation(command, args, platform = process.platform, env = process.env) {
   if (command === 'node') return { file: process.execPath, args: [...args], shell: false }
@@ -30,21 +43,25 @@ export function resolveCommandInvocation(command, args, platform = process.platf
   if (command === 'electron-builder') {
     return { file: process.execPath, args: [localRequire.resolve('electron-builder/cli.js'), ...args], shell: false }
   }
-  if (command === 'npm') {
-    const npmCli = env.npm_execpath
-    if (npmCli) {
-      const validatedNpmCli = validateAbsoluteSingleLinePath(npmCli, 'npm_execpath', platform)
-      if (!/\.[cm]?js$/i.test(validatedNpmCli)) {
-        throw new Error('npm_execpath must identify an absolute JavaScript npm CLI path')
+  if (command === 'pnpm') {
+    let sawNonJavaScriptLifecycleCli = false
+    for (const lifecycleCli of [env.pnpm_execpath, env.npm_execpath]) {
+      if (!lifecycleCli) continue
+      const validatedPnpmCli = validateAbsoluteSingleLinePath(lifecycleCli, 'pnpm CLI path', platform)
+      if (/\.[cm]?js$/i.test(validatedPnpmCli)) {
+        return { file: process.execPath, args: [validatedPnpmCli, ...args], shell: false }
       }
-      return { file: process.execPath, args: [validatedNpmCli, ...args], shell: false }
+      sawNonJavaScriptLifecycleCli = true
     }
+    const corepackCli = resolveCorepackPnpmCli(platform, env)
+    if (corepackCli) return { file: process.execPath, args: [corepackCli, ...args], shell: false }
     if (platform === 'win32') {
-      const adjacentCli = join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
-      if (existsSync(adjacentCli)) return { file: process.execPath, args: [adjacentCli, ...args], shell: false }
-      throw new Error('Cannot locate a JavaScript npm CLI safely on Windows; run this command through npm or use a Node distribution that includes npm')
+      if (sawNonJavaScriptLifecycleCli) {
+        throw new Error('The pnpm CLI path must identify an absolute JavaScript entrypoint')
+      }
+      throw new Error('Cannot locate the Corepack pnpm CLI safely on Windows; run this command through pnpm or run corepack install first')
     }
-    return { file: 'npm', args: [...args], shell: false }
+    return { file: 'pnpm', args: [...args], shell: false }
   }
   return { file: command, args: [...args], shell: false }
 }
@@ -105,17 +122,17 @@ export function parseToolchainMetadata(packageJsonSource, nvmrcSource) {
     throw new Error(`Cannot parse package.json: ${error instanceof Error ? error.message : String(error)}`)
   }
   const node = parseEngineFloor(packageJson?.engines?.node, 'engines.node')
-  const npm = parseEngineFloor(packageJson?.engines?.npm, 'engines.npm')
+  const pnpm = parseEngineFloor(packageJson?.engines?.pnpm, 'engines.pnpm')
   const nvmNode = parseStableVersion(nvmrcSource.trim(), '.nvmrc').version
   if (nvmNode !== node) throw new Error(`.nvmrc (${nvmNode}) must match the package.json engines.node floor (${node})`)
 
   const packageManager = packageJson?.packageManager
-  const packageManagerMatch = typeof packageManager === 'string' ? /^npm@((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))$/.exec(packageManager) : null
-  if (!packageManagerMatch) throw new Error('package.json packageManager must pin npm as npm@x.y.z')
-  if (packageManagerMatch[1] !== npm) {
-    throw new Error(`package.json packageManager (${packageManagerMatch[1]}) must match the engines.npm floor (${npm})`)
+  const packageManagerMatch = typeof packageManager === 'string' ? /^pnpm@((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))$/.exec(packageManager) : null
+  if (!packageManagerMatch) throw new Error('package.json packageManager must pin pnpm as pnpm@x.y.z')
+  if (packageManagerMatch[1] !== pnpm) {
+    throw new Error(`package.json packageManager (${packageManagerMatch[1]}) must match the engines.pnpm floor (${pnpm})`)
   }
-  return { node, npm }
+  return { node, pnpm }
 }
 
 export function readRepositoryToolchain() {
@@ -137,23 +154,23 @@ function removeFinalLineEnding(output) {
   return output
 }
 
-export function readNpmOutput(args, options = {}) {
+export function readPnpmOutput(args, options = {}) {
   const platform = options.platform ?? process.platform
   const env = options.env ?? process.env
-  const invocation = options.npmCliPath
+  const invocation = options.pnpmCliPath
     ? {
         file: process.execPath,
-        args: [validateAbsoluteSingleLinePath(options.npmCliPath, 'npm CLI path', platform), ...args],
+        args: [validateAbsoluteSingleLinePath(options.pnpmCliPath, 'pnpm CLI path', platform), ...args],
         shell: false,
       }
-    : resolveCommandInvocation('npm', args, platform, env)
+    : resolveCommandInvocation('pnpm', args, platform, env)
   const result = spawnSync(invocation.file, invocation.args, {
     encoding: 'utf8',
     env,
     shell: invocation.shell,
     windowsHide: true,
   })
-  const command = `npm ${args.join(' ')}`
+  const command = `pnpm ${args.join(' ')}`
   if (result.error) throw new Error(`Cannot run ${command}: ${result.error.message}`)
   if (result.status !== 0) {
     const detail = result.stderr?.trim()
@@ -164,25 +181,25 @@ export function readNpmOutput(args, options = {}) {
   return output
 }
 
-export function readNpmVersion(options = {}) {
-  return readNpmOutput(['--version'], options)
+export function readPnpmVersion(options = {}) {
+  return readPnpmOutput(['--version'], options)
 }
 
 export function assertSupportedNode(version = process.version, toolchain = readRepositoryToolchain()) {
   assertMinimumVersion('Node.js', version, toolchain.node, true)
 }
 
-export function assertSupportedNpm(version = readNpmVersion(), toolchain = readRepositoryToolchain()) {
-  assertMinimumVersion('npm', version, toolchain.npm)
+export function assertSupportedPnpm(version = readPnpmVersion(), toolchain = readRepositoryToolchain()) {
+  assertMinimumVersion('pnpm', version, toolchain.pnpm)
 }
 
 export function assertSupportedToolchain(options = {}) {
   const toolchain = options.toolchain ?? readRepositoryToolchain()
   const nodeVersion = options.nodeVersion ?? process.version
-  const npmVersion = options.npmVersion ?? readNpmVersion(options)
+  const pnpmVersion = options.pnpmVersion ?? readPnpmVersion(options)
   assertSupportedNode(nodeVersion, toolchain)
-  assertSupportedNpm(npmVersion, toolchain)
-  return { node: nodeVersion, npm: npmVersion, minimum: toolchain }
+  assertSupportedPnpm(pnpmVersion, toolchain)
+  return { node: nodeVersion, pnpm: pnpmVersion, minimum: toolchain }
 }
 
 function requireNonEmpty(env, names, label) {
@@ -265,6 +282,7 @@ export function assertAsarLayout(entries) {
     'out/preload/index.js',
     'out/renderer/index.html',
     'node_modules/node-pty/lib/index.js',
+    'node_modules/@earendil-works/pi-ai/dist/index.js',
     'node_modules/zeromq/lib/index.js',
     'node_modules/zeromq/build/manifest.json',
   ]

@@ -3,7 +3,7 @@ import { indexStartedSession, sessionTitleFromPrompt, titleStartedSession } from
 import type { PrimeWorkApi, SessionRecord } from '../../src/types/api'
 
 const existing: SessionRecord = {
-  id: 'existing', harness: 'prime', filePath: '/sessions/existing.jsonl', projectPath: '/project', title: 'Existing chat',
+  id: 'existing', harness: 'pi', filePath: '/sessions/existing.jsonl', projectPath: '/project', title: 'Existing chat',
   createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', status: 'idle', depth: 0, unread: false,
 }
 
@@ -24,12 +24,12 @@ describe('new session indexing', () => {
 
     const indexed = await indexStartedSession({
       bridge: { sessions: { list } } as unknown as PrimeWorkApi,
-      harness: 'prime',
+      harness: 'pi',
       sessionFile: created.filePath,
       setSessions,
     })
 
-    expect(list).toHaveBeenCalledWith(undefined, true, 'prime', true)
+    expect(list).toHaveBeenCalledWith(undefined, true, 'pi', true)
     expect(indexed).toEqual(created)
     expect(sessions.map((session) => session.id)).toEqual(['existing', 'created'])
   })
@@ -51,7 +51,7 @@ describe('new session indexing', () => {
 
     await titleStartedSession({
       bridge: { agent: { command }, sessions: { list } } as unknown as PrimeWorkApi,
-      harness: 'prime',
+      harness: 'pi',
       runtimeId: 'runtime-created',
       sessionFile: untitled.filePath,
       prompt: '  Build the sidebar\nright away.  ',
@@ -59,7 +59,7 @@ describe('new session indexing', () => {
     })
 
     expect(command).toHaveBeenCalledWith('runtime-created', { type: 'set_session_name', name: 'Build the sidebar right away.' })
-    expect(list).toHaveBeenCalledWith(undefined, true, 'prime', true)
+    expect(list).toHaveBeenCalledWith(undefined, true, 'pi', true)
     expect(sessions.find((session) => session.id === 'created')?.title).toBe('Build the sidebar right away.')
   })
 
@@ -80,7 +80,7 @@ describe('new session indexing', () => {
 
     await expect(titleStartedSession({
       bridge: { agent: { command }, sessions: { list } } as unknown as PrimeWorkApi,
-      harness: 'prime',
+      harness: 'pi',
       runtimeId: 'runtime-created',
       sessionFile: titled.filePath,
       prompt: 'Prompt fallback title',
@@ -106,7 +106,7 @@ describe('new session indexing', () => {
 
     const indexing = indexStartedSession({
       bridge: { sessions: { list } } as unknown as PrimeWorkApi,
-      harness: 'prime',
+      harness: 'pi',
       sessionFile: '/sessions/created.jsonl',
       setSessions,
       isCurrent: () => current,

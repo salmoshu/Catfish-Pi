@@ -18,7 +18,7 @@ The required checks are exactly the seven normal pull-request gates:
 
 Do not require `local-qa-package`: it is manual local QA, runs only through `workflow_dispatch`, and is intentionally excluded from pull-request validation.
 
-`Production dependency audit` is a seventh pull-request gate: it runs the exception-aware `npm run audit:production` evaluator against the exact PR head, and the release workflow runs the same evaluator against its validated immutable SHA before any package or publication job. After the check context first appears on a pull request, a repository administrator must add `Production dependency audit` to the required status checks on `main`. The scheduled [dependency-audit workflow](../.github/workflows/audit.yml) remains for advisories disclosed after merge.
+`Production dependency audit` is a seventh pull-request gate: it runs the exception-aware `pnpm run audit:production` evaluator against the exact PR head, and the release workflow runs the same evaluator against its validated immutable SHA before any package or publication job. After the check context first appears on a pull request, a repository administrator must add `Production dependency audit` to the required status checks on `main`. The scheduled [dependency-audit workflow](../.github/workflows/audit.yml) remains for advisories disclosed after merge.
 
 GitHub merge queues are not available to this public repository while it is owned by a personal account. Consequently, `merge_group` or a required merge queue cannot enforce this policy here; strict up-to-date branch protection is the supported latest-main control. If the repository moves to an organization, merge-queue support should be designed and tested separately before enabling it.
 
@@ -37,7 +37,7 @@ gh api repos/salmoshu/Catfish-Pi/branches/main/protection \
 | Tagged public releases | [`.github/workflows/release.yml`](../.github/workflows/release.yml) |
 | Scheduled production-dependency audit | [`.github/workflows/audit.yml`](../.github/workflows/audit.yml) |
 | Aggregate commands and toolchain policy | [`package.json`](../package.json) and [`.nvmrc`](../.nvmrc) |
-| Resolved dependency graph | [`package-lock.json`](../package-lock.json) |
+| Resolved dependency graph | [`pnpm-lock.yaml`](../pnpm-lock.yaml) |
 | Dependency-install lifecycle | [`package.json`](../package.json) and [`install-app-deps.mjs`](../scripts/release/install-app-deps.mjs) |
 | Package and post-package guarantees | [`scripts/release/package.mjs`](../scripts/release/package.mjs), [`verify-package.mjs`](../scripts/release/verify-package.mjs), and [`verify-cross-platform-package.mjs`](../scripts/release/verify-cross-platform-package.mjs) |
 | Audit policy and accepted risk | [`docs/security.md`](security.md), [`audit-production.mjs`](../scripts/release/audit-production.mjs), and [`audit-exceptions.json`](../scripts/release/audit-exceptions.json) |
@@ -46,25 +46,26 @@ Read these files at the commit being validated. Job names, test inventory, depen
 
 ## Reproducible setup
 
-The repository derives its Node and npm policy from checked-in metadata. `package.json#engines`, `package.json#packageManager`, and `.nvmrc` must agree; release entry points reject unsupported, malformed, or prerelease tool versions. With `nvm`, prepare a checkout as follows:
+The repository derives its Node and pnpm policy from checked-in metadata. `package.json#engines`, `package.json#packageManager`, and `.nvmrc` must agree; release entry points reject unsupported, malformed, or prerelease tool versions. With `nvm` and Corepack, prepare a checkout as follows:
 
 ```bash
 nvm install
 nvm use
-npm run toolchain:bootstrap
-npm ci
-npm run release:preflight:toolchain
+corepack enable
+corepack install
+pnpm install --frozen-lockfile
+pnpm run release:preflight:toolchain
 ```
 
-Run `toolchain:bootstrap` before installing project dependencies. It installs the `packageManager`-pinned npm into the invoked npm's validated global prefix, verifies the exact installed JavaScript CLI with the active Node executable, and publishes the matching shim directory to later GitHub Actions steps. This is necessary because the npm bundled by `actions/setup-node` can be older than the repository's npm floor.
+Run `corepack enable` and `corepack install` before installing project dependencies. Corepack activates the exact pnpm pinned by `package.json#packageManager`, so every checkout and CI job resolves dependencies with the same package manager.
 
-`npm ci` runs the shared `postinstall` entry point. That entry point installs Electron's platform runtime synchronously before asking Electron Builder to rebuild native dependencies, so parallel test workers do not race Electron's lazy downloader. Installing with `--ignore-scripts` intentionally skips both operations; follow the recovery sequence in the [source setup instructions](../README.md#run-from-source) before running or packaging the application.
+`pnpm install --frozen-lockfile` installs exactly the graph recorded in `pnpm-lock.yaml` and runs the shared `postinstall` entry point. That entry point installs Electron's platform runtime synchronously before asking Electron Builder to rebuild native dependencies, so parallel test workers do not race Electron's lazy downloader. Installing with `--ignore-scripts` intentionally skips both operations; follow the recovery sequence in the [source setup instructions](../README.md#run-from-source) before running or packaging the application.
 
-Do not hard-code the current Node, npm, or Electron version in validation notes. Record the values observed for the tested commit instead.
+Do not hard-code the current Node, pnpm, or Electron version in validation notes. Record the values observed for the tested commit instead.
 
 ## Pull-request and branch CI
 
-The [CI workflow](../.github/workflows/ci.yml) runs on pull requests, pushes to `main`, and manual dispatch. Each Node job bootstraps the repository npm before `npm ci` and executes the toolchain-only release preflight after installation.
+The [CI workflow](../.github/workflows/ci.yml) runs on pull requests, pushes to `main`, and manual dispatch. Each Node job activates the repository pnpm with Corepack before `pnpm install --frozen-lockfile` and executes the toolchain-only release preflight after installation.
 
 | Job | When it runs | What a pass establishes |
 |---|---|---|
@@ -90,26 +91,26 @@ Use focused tests while developing, then choose the aggregate that matches the c
 
 | Command | Scope |
 |---|---|
-| `npm run release:verify:package` | Toolchain preflight, typecheck, configured code checks, coverage tests, production bundle, and bundle-size gate. It does not create an installer or run Electron E2E. |
-| `npm run release:verify` | The package-verification aggregate above plus the hermetic Electron E2E suite. |
-| `npm run test:e2e` | Builds the application, then runs the hermetic Electron E2E suite. |
-| `npm run audit:production` | Fetches npm's production audit report and applies the repository's high/critical advisory and exception policy. Network access is required. |
-| `npm run package:mac:local-qa` | On macOS, runs the relevant verification aggregate, creates unsigned/unnotarized DMG and ZIP artifacts, and applies macOS post-package checks in QA mode. |
-| `npm run package:linux:local-qa` | On Linux, runs the package-verification aggregate, creates the configured Linux artifacts, and verifies their runtime layout in QA mode. |
-| `npm run package:win:local-qa` | On Windows, runs the package-verification aggregate, creates the configured Windows artifacts, and verifies their runtime layout in QA mode. |
+| `pnpm run release:verify:package` | Toolchain preflight, typecheck, configured code checks, coverage tests, production bundle, and bundle-size gate. It does not create an installer or run Electron E2E. |
+| `pnpm run release:verify` | The package-verification aggregate above plus the hermetic Electron E2E suite. |
+| `pnpm run test:e2e` | Builds the application, then runs the hermetic Electron E2E suite. |
+| `pnpm run audit:production` | Fetches the production audit report and applies the repository's high/critical advisory and exception policy. Network access is required. |
+| `pnpm run package:mac:local-qa` | On macOS, runs the relevant verification aggregate, creates unsigned/unnotarized DMG and ZIP artifacts, and applies macOS post-package checks in QA mode. |
+| `pnpm run package:linux:local-qa` | On Linux, runs the package-verification aggregate, creates the configured Linux artifacts, and verifies their runtime layout in QA mode. |
+| `pnpm run package:win:local-qa` | On Windows, runs the package-verification aggregate, creates the configured Windows artifacts, and verifies their runtime layout in QA mode. |
 
 Packaging is native: run each platform command on its matching operating system and architecture. The public `package:mac`, `package:linux`, and `package:win` commands use distribution mode; macOS and Windows distribution checks require their external signing configuration. A successful local-QA command must not be described as a public trust check.
 
 ## Dependency audit policy
 
-The [dependency-audit workflow](../.github/workflows/audit.yml) runs weekly and on manual dispatch. It uses the repository toolchain and executes `npm run audit:production` against the production dependency graph. This scheduled job supplies advisory coverage for vendored package forms that Dependabot cannot parse.
+The [dependency-audit workflow](../.github/workflows/audit.yml) runs weekly and on manual dispatch. It uses the repository toolchain and executes `pnpm run audit:production` against the production dependency graph. This scheduled job supplies advisory coverage for vendored package forms that Dependabot cannot parse.
 
 Ordinary PR CI validates the exception file and its expiry rules, but it does not replace the live registry-backed audit. Use the scheduled or manually dispatched audit workflow when making a current dependency-advisory claim.
 
-The project gate and raw npm output answer different questions:
+The project gate and raw audit output answer different questions:
 
-- `npm audit --omit=dev` is the underlying registry report for the production lock graph. Its output and exit status are diagnostic and can change as the advisory database changes.
-- `npm run audit:production` parses that report and fails on every unaccepted **high** or **critical** advisory.
+- `pnpm audit --prod` is the underlying registry report for the production lock graph. Its output and exit status are diagnostic and can change as the advisory database changes.
+- `pnpm run audit:production` parses that report and fails on every unaccepted **high** or **critical** advisory.
 - [`audit-exceptions.json`](../scripts/release/audit-exceptions.json) can accept an exact advisory/package pair only with a reason and expiry. The gate also fails expired exceptions and stale exceptions that no longer match the report.
 - The ordinary release-script tests check exception structure and expiry, so an elapsed acceptance is visible in PR CI as well as in the weekly audit.
 
@@ -142,7 +143,7 @@ Keep point-in-time results in the PR, release notes, or another commit-addressed
 
 - the full commit SHA and whether the worktree was clean;
 - the workflow run URL or exact commands and exit status;
-- runner image or local OS/architecture, plus observed Node and npm versions;
+- runner image or local OS/architecture, plus observed Node and pnpm versions;
 - workflow inputs and which conditional jobs or steps were skipped;
 - the audit exception file used for dependency-audit claims;
 - artifact names and checksums, and whether each artifact was unsigned, signed, notarized, stapled, or provenance-attested;

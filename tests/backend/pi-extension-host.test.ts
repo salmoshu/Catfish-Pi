@@ -142,7 +142,7 @@ describe('extensions on a base pi host (no injected pi.typebox)', () => {
     const { tools, pi } = piHost()
     await factory(pi as unknown as CollaborationExtensionApi)
     expect(tools.map((tool) => tool.name)).toEqual(['catfishpi_session_list', 'catfishpi_session_models', 'catfishpi_session_create', 'catfishpi_session_read', 'catfishpi_session_send', 'catfishpi_session_wait'])
-    expect(schemaOf(tools[1]).required).toBeUndefined()
+    expect(schemaOf(tools[1]).required).toEqual([])
     expect(schemaOf(tools[2]).required).toEqual(['prompt'])
     expect(schemaOf(tools[2]).properties).toHaveProperty('model')
     expect(schemaOf(tools[2]).properties).toHaveProperty('reasoning')

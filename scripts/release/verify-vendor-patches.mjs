@@ -9,12 +9,6 @@ const ROOT = resolve(import.meta.dirname, '../..')
 const VENDOR = join(ROOT, 'vendor')
 const PACKAGES = [
   {
-    base: 'prime-agent-0.7.0.tgz',
-    output: 'prime-agent-0.7.0-gooeypi.1.tgz',
-    patch: 'patches/prime-agent-0.7.0-gooeypi.1.patch',
-    baseSha256: '88b6578518c72cd51a825bc80f28e0fef9a64c67de4a7d6fd7afd7ca1b34da0b',
-  },
-  {
     base: 'prime-agent-ai-0.7.0.tgz',
     output: 'prime-agent-ai-0.7.0-gooeypi.1.tgz',
     patch: 'patches/prime-agent-ai-0.7.0-gooeypi.1.patch',
@@ -70,7 +64,7 @@ for (const spec of PACKAGES) {
     run('tar', ['-xzf', outputPath, '-C', reviewed], ROOT)
     assertTreeMatches(join(work, 'package'), join(reviewed, 'package'))
 
-    run('npm', ['pack', join(work, 'package'), '--pack-destination', rebuilt, '--ignore-scripts'], ROOT)
+    run('pnpm', ['pack', '--dir', join(work, 'package'), '--ignore-workspace', '--pack-destination', rebuilt], ROOT)
     const generated = join(rebuilt, basename(outputPath))
     console.log(`${spec.output}: content verified; reproducible archive ${sha256(generated)}`)
   } finally {

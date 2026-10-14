@@ -10,7 +10,7 @@ export type WorkspaceView = 'session' | 'projects' | 'activity' | 'scheduled' | 
 export type InspectorTab = 'summary' | 'changes' | 'browser' | 'files'
 export type SessionStatus = 'idle' | 'running' | 'waiting' | 'complete' | 'failed' | 'unknown'
 
-export const HARNESS_IDS = ['omp', 'prime', 'pi'] as const
+export const HARNESS_IDS = ['omp', 'pi'] as const
 export type HarnessId = (typeof HARNESS_IDS)[number]
 
 /**
@@ -262,14 +262,6 @@ export interface PrimeModelCatalog {
   warning?: string
 }
 
-export type ProviderAuthEvent =
-  | { flowId: string; providerId: string; type: 'auth'; url: string; instructions?: string }
-  | { flowId: string; providerId: string; type: 'progress'; message: string }
-  | { flowId: string; providerId: string; type: 'prompt'; promptId: string; message: string; placeholder?: string; allowEmpty?: boolean }
-  | { flowId: string; providerId: string; type: 'select'; promptId: string; message: string; options: Array<{ id: string; label: string }> }
-  | { flowId: string; providerId: string; type: 'complete' | 'cancelled' }
-  | { flowId: string; providerId: string; type: 'error'; error: string }
-
 export interface PrimeEventEnvelope {
   runtimeId: string
   event: Record<string, unknown>
@@ -513,17 +505,13 @@ export interface AppSettings {
   browserEnabled: boolean
   /** Expose the separately installed TryCUA driver to new sessions through its official CLI. */
   computerUseEnabled: boolean
-  /** Providers hidden from Prime Work's Prime model picker. */
-  disabledProviders: string[]
-  /** Models hidden from Prime Work's Prime model picker, stored as provider/model keys. */
-  disabledModels: string[]
-  /** Providers hidden from Prime Work's OMP model picker; OMP config is untouched. */
+  /** Providers hidden from Catfish-Pi's OMP model picker; OMP config is untouched. */
   ompDisabledProviders: string[]
-  /** Models hidden from Prime Work's OMP model picker; OMP config is untouched. */
+  /** Models hidden from Catfish-Pi's OMP model picker; OMP config is untouched. */
   ompDisabledModels: string[]
-  /** Providers hidden from Prime Work's pi model picker; pi config is untouched. */
+  /** Providers hidden from Catfish-Pi's pi model picker; pi config is untouched. */
   piDisabledProviders: string[]
-  /** Models hidden from Prime Work's pi model picker; pi config is untouched. */
+  /** Models hidden from Catfish-Pi's pi model picker; pi config is untouched. */
   piDisabledModels: string[]
   /** Last usable model selected in each harness; blank falls back to the first usable catalog model. */
   lastSelectedModels: Record<HarnessId, string>
@@ -698,22 +686,6 @@ export interface ScheduleChangeEvent {
   reason: 'created' | 'updated' | 'deleted' | 'run'
 }
 
-export interface NativeHeartbeatRecord {
-  id: string
-  source: 'heartbeat' | 'rlm_heartbeat'
-  status: 'active' | 'paused'
-  prompt: string
-  schedule: string
-  sessionId: string
-  sessionFile: string
-  activeSessionId: string
-  deliveryMode?: 'steer' | 'follow_up'
-  nextRunAt?: string
-  lastRunAt?: string
-  label?: string
-  runtimeId?: string
-}
-
 /** One agent-controlled browser tab. The registry lives in the main process; the renderer hosts the webview guests and mirrors this state. */
 export interface AgentBrowserTabRecord {
   tabId: string
@@ -790,15 +762,9 @@ export interface PrimeWorkApi {
   }
   providers: {
     catalog(force?: boolean, harness?: HarnessId): Promise<PrimeModelCatalog>
-    saveApiKey(providerId: string, apiKey: string): Promise<PrimeModelCatalog>
-    logout(providerId: string): Promise<PrimeModelCatalog>
     setEnabled(providerId: string, enabled: boolean, harness?: HarnessId): Promise<PrimeModelCatalog>
     setDisabled(providerIds: string[], harness?: HarnessId): Promise<PrimeModelCatalog>
     setModelEnabled(modelKey: string, enabled: boolean, harness?: HarnessId): Promise<PrimeModelCatalog>
-    startOAuth(providerId: string): Promise<{ flowId: string }>
-    respondOAuth(flowId: string, promptId: string, value?: string): Promise<boolean>
-    cancelOAuth(flowId: string): Promise<boolean>
-    onAuthEvent(callback: (event: ProviderAuthEvent) => void): () => void
   }
   voice: {
     credentialStatus(): Promise<VoiceCredentialStatus>
@@ -846,10 +812,6 @@ export interface PrimeWorkApi {
     onChanged(callback: (state: AgentBrowserState) => void): () => void
     onPointer(callback: (event: AgentBrowserPointerEvent) => void): () => void
     onActivity(callback: (event: AgentBrowserActivityEvent) => void): () => void
-  }
-  heartbeats: {
-    list(): Promise<NativeHeartbeatRecord[]>
-    manage(id: string, action: 'pause' | 'resume' | 'stop'): Promise<NativeHeartbeatRecord | null>
   }
   schedules: {
     list(harness?: HarnessId): Promise<AutomationScheduleRecord[]>

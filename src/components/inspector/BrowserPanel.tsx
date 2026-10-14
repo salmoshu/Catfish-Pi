@@ -313,7 +313,7 @@ export function BrowserPanel({ home, navigationRequest, onNavigationRequestHandl
       return
     }
     if (annotationsRef.current.atCapacity) {
-      showNotice(`Prime keeps at most ${MAX_BROWSER_ANNOTATIONS} annotations. Remove one from the composer attachment to add more.`)
+      showNotice(`Catfish-Pi keeps at most ${MAX_BROWSER_ANNOTATIONS} annotations. Remove one from the composer attachment to add more.`)
       return
     }
     setNotice('')
@@ -332,7 +332,7 @@ export function BrowserPanel({ home, navigationRequest, onNavigationRequestHandl
       /* webview not ready */
     }
     if (!annotationsRef.current.add({ comment: annotationText, element: pendingElement, pageUrl, pageTitle })) {
-      showNotice(`Prime keeps at most ${MAX_BROWSER_ANNOTATIONS} annotations. Remove one from the composer attachment to add more.`)
+      showNotice(`Catfish-Pi keeps at most ${MAX_BROWSER_ANNOTATIONS} annotations. Remove one from the composer attachment to add more.`)
       return
     }
     setPendingElement(null)

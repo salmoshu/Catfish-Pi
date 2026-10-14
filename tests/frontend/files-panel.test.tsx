@@ -27,7 +27,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount())
   container.remove()
-  Reflect.deleteProperty(window, 'prime')
+  Reflect.deleteProperty(window, 'pi')
   vi.restoreAllMocks()
 })
 
@@ -53,7 +53,7 @@ const sampleEntries: ProjectFileEntry[] = [
 
 const sampleProject: ProjectRecord = {
   id: 'test-project',
-  harness: 'prime',
+  harness: 'pi',
   name: 'test-project',
   path: '/workspace/test-project',
   folders: ['/workspace/test-project'],
@@ -245,7 +245,7 @@ describe('FilesPanel component', () => {
       await Promise.resolve()
     })
 
-    expect(listFiles).toHaveBeenCalledWith('/workspace/test-project', 'prime')
+    expect(listFiles).toHaveBeenCalledWith('/workspace/test-project', 'pi')
 
     // Root button should show project name
     const treeRoot = container.querySelector('.tree-root')

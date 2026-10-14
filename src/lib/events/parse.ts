@@ -1,6 +1,6 @@
 import type { MessagePart } from '@/types/api'
 
-/** Record and field coercion for raw Prime events. */
+/** Record and field coercion for raw harness events. */
 
 export type UnknownRecord = Record<string, unknown>
 

@@ -80,7 +80,7 @@ function ReasoningPart({ part, streaming = false }: { part: Extract<MessagePart,
 
 export function ThinkingDots({ labelled = false }: { labelled?: boolean }) {
   return (
-    <span className="thinking-dots" role={labelled ? 'status' : undefined} aria-label={labelled ? 'Prime is thinking' : undefined} aria-hidden={labelled ? undefined : true}>
+    <span className="thinking-dots" role={labelled ? 'status' : undefined} aria-label={labelled ? 'Agent is thinking' : undefined} aria-hidden={labelled ? undefined : true}>
       <span /><span /><span />
     </span>
   )

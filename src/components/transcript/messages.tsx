@@ -9,7 +9,7 @@ import { writeClipboardText } from '@/lib/clipboard'
 import { boundText } from '@/lib/render-bounds'
 import { HARNESS_SHORT_NAMES } from '@/lib/harness'
 import { MarkdownText } from '../MarkdownText'
-import { OmpMark, PiMark, PrimeMark } from '../ui'
+import { CatfishPiMark, OmpMark, PiMark } from '../ui'
 import { InlineText } from './syntax'
 import { TranscriptImage } from './TranscriptImage'
 import { ThinkingDots, WorkDisclosure, WorkTimeline } from './timeline'
@@ -130,7 +130,7 @@ function MessageActions({ message, text: suppliedText }: { message: TranscriptMe
   )
 }
 
-const HARNESS_MARKS = { omp: OmpMark, prime: PrimeMark, pi: PiMark } satisfies Record<HarnessId, unknown>
+const HARNESS_MARKS = { omp: OmpMark, pi: PiMark } satisfies Record<HarnessId, unknown>
 
 function AssistantHarnessMark({ harness, size = 24 }: { harness: HarnessId; size?: number }) {
   const Mark = HARNESS_MARKS[harness]
@@ -138,7 +138,7 @@ function AssistantHarnessMark({ harness, size = 24 }: { harness: HarnessId; size
 }
 
 export const AssistantMessage = memo(
-  function AssistantMessage({ message, harness = 'prime', showReasoning, showTools }: { message: TranscriptMessage; harness?: HarnessId; showReasoning: boolean; showTools: boolean }) {
+  function AssistantMessage({ message, harness = 'pi', showReasoning, showTools }: { message: TranscriptMessage; harness?: HarnessId; showReasoning: boolean; showTools: boolean }) {
     const isActivity = (part: MessagePart) => part.type === 'thinking' || part.type === 'toolCall' || part.type === 'toolResult' || part.type === 'agentMessage' || part.type === 'compaction'
     const firstActivity = message.parts.findIndex(isActivity)
     let lastActivity = -1
@@ -274,7 +274,7 @@ export const SteerReadMarker = memo(function SteerReadMarker({ message }: { mess
   return <div className="message message--steer-read" role="status"><span>{messageText(message)}</span></div>
 })
 
-export const ActivityMessage = memo(function ActivityMessage({ message, harness = 'prime' }: { message: TranscriptMessage; harness?: HarnessId }) {
+export const ActivityMessage = memo(function ActivityMessage({ message, harness = 'pi' }: { message: TranscriptMessage; harness?: HarnessId }) {
   const activityLabel = `${HARNESS_SHORT_NAMES[harness]} message`
   const sourceParts: MessagePart[] =
     message.role === 'system' && !message.parts.some((part) => part.type === 'compaction')
@@ -301,7 +301,7 @@ export const AgentMessage = memo(function AgentMessage({ message }: { message: T
   return (
     <article className={`message message--agent ${open ? 'is-open' : ''}`}>
       <button type="button" className="agent-message__summary" aria-expanded={open} aria-controls={contentId} aria-label={label} onClick={() => setOpen((value) => !value)}>
-        <PrimeMark size={18} />
+        <CatfishPiMark size={18} />
         <span className="agent-message__label">Message from agent</span>
         {message.agentName ? <span className="agent-message__name">{message.agentName}</span> : null}
         {open ? <ChevronDown className="agent-message__chevron" size={13} /> : <ChevronRight className="agent-message__chevron" size={13} />}

@@ -114,7 +114,7 @@ export function DesktopPet({ pets, petId, agentBusy, voiceActive, reduceMotion, 
     return () => window.clearTimeout(timer)
   }, [jumping, reduceMotion])
 
-  const pet = useMemo(() => available.find((item) => item.id === petId) ?? available.find((item) => item.id === 'orb') ?? BUILT_INS[0], [available, petId])
+  const pet = useMemo(() => available.find((item) => item.id === petId) ?? available.find((item) => item.id === 'catfish-pi') ?? BUILT_INS[1], [available, petId])
   const activity: PetActivity = dragging
     ? direction === 'left' ? 'running-left' : 'running-right'
     : jumping ? 'jumping'

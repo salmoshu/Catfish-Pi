@@ -1,4 +1,4 @@
-import { supportsFastMode } from 'prime-agent-ai'
+import { supportsFastMode } from '@earendil-works/pi-ai'
 import type { PrimeModelCatalog, PrimeModelDescriptor, PrimeProviderDescriptor } from '../../src/types/api'
 import { catalogLimitWarnings, limitCatalogRelations, type ModelCatalogProvider } from './model-catalog'
 import { withModelVisibility } from './model-visibility'
@@ -36,7 +36,7 @@ export function boundedInteger(value: unknown): number {
 
 /**
  * Neither CLI carries per-model fast-mode metadata, so both delegate to the
- * same `supportsFastMode` predicate Prime uses and the model family can never
+ * vendored `supportsFastMode` predicate and the model family can never
  * drift between harnesses. The API variant is not reported either, but the
  * openai-codex provider maps 1:1 onto the openai-codex-responses API the
  * predicate requires, and every other provider fails its provider check

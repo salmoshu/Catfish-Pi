@@ -146,21 +146,21 @@ describe('registerIpc verify gate', () => {
 
   it('recycles all harness runtimes when the universal ask_user toggle changes', async () => {
     const event = fakeEvent()
-    const refreshPrime = vi.fn(async () => undefined)
     const refreshOmp = vi.fn(async () => undefined)
     const refreshPi = vi.fn(async () => undefined)
     stubs.settings = {
       get: () => ({ askUserEnabled: true }),
       update: vi.fn(async () => ({ interfaceFontScale: 110, askUserEnabled: false })),
     }
-    stubs.agents = { ...serviceStub(), requestRuntimeEnvironmentRefresh: refreshPrime }
-    ;(stubs.omp as { agents: unknown }).agents = { ...serviceStub(), requestRuntimeEnvironmentRefresh: refreshOmp }
-    ;(stubs.pi as { agents: unknown }).agents = { ...serviceStub(), requestRuntimeEnvironmentRefresh: refreshPi }
+    // `stubs` is a loose Record; the omp/pi harness buckets always exist on it (see services()).
+    const ompBucket = stubs.omp as { agents: unknown }
+    const piBucket = stubs.pi as { agents: unknown }
+    ompBucket.agents = { ...serviceStub(), requestRuntimeEnvironmentRefresh: refreshOmp }
+    piBucket.agents = { ...serviceStub(), requestRuntimeEnvironmentRefresh: refreshPi }
     registration.authorize(event.sender as never)
 
     await handlers.get('settings:update')!(event, { askUserEnabled: false })
 
-    expect(refreshPrime).toHaveBeenCalledOnce()
     expect(refreshOmp).toHaveBeenCalledOnce()
     expect(refreshPi).toHaveBeenCalledOnce()
     registration.dispose()

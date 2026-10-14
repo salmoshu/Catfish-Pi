@@ -19,7 +19,7 @@ export interface HarnessStartArgsInput {
   environment: NodeJS.ProcessEnv
 }
 
-/** Harness-specific fields read from get_state data, normalized to Prime vocabulary. */
+/** Harness-specific fields read from get_state data, normalized to the shared renderer vocabulary. */
 export interface HarnessStateReading {
   serviceTier?: 'default' | 'priority'
   contextUsage?: PrimeContextUsage
@@ -49,7 +49,7 @@ export interface HarnessRpcAdapter {
   buildStartArgs(input: HarnessStartArgsInput): string[]
   /** Renderer command vocabulary → harness wire vocabulary. Throws for commands the harness does not support. */
   translateCommand(command: RpcObject): RpcObject
-  /** Harness event → Prime event vocabulary; null swallows the event entirely. */
+  /** Harness event → shared renderer event vocabulary; null swallows the event entirely. */
   normalizeEvent(event: RpcObject): RpcObject | null
   /** The wire command that applies a service-tier preference; absent when the harness has no service tier, which the runtime reports as unsupported. */
   buildServiceTierCommand?(serviceTier: 'default' | 'priority'): RpcObject
@@ -98,34 +98,6 @@ const stripStreamingBehavior = (command: RpcObject): RpcObject => {
   // Pi and OMP drop streamingBehavior pending compatibility verification.
   const { streamingBehavior: _, ...rest } = command
   return rest
-}
-
-export const PRIME_RPC_ADAPTER: HarnessRpcAdapter = {
-  id: 'prime',
-  agentName: HARNESSES.prime.agentName,
-  chunkedFrames: false,
-  buildStartArgs: (input) => {
-    const args = ['--mode', 'rpc', '--cwd', input.cwd]
-    if (input.sessionPath) args.push('--resume', input.sessionPath)
-    if (input.modelId !== undefined) {
-      if (unsafeArgValue(input.modelId)) throw new TypeError('Invalid model')
-      if (input.providerId) args.push('--provider', input.providerId)
-      args.push('--model', input.modelId)
-    }
-    if (input.thinking) args.push('--thinking', input.thinking)
-    for (const skillPath of [input.environment.PRIME_WORK_SCHEDULE_SKILL_PATH, input.environment.PRIME_WORK_BROWSER_SKILL_PATH, input.environment.CATFISHPI_COMPUTER_USE_SKILL_PATH]) {
-      if (skillPath && !unsafeArgValue(skillPath)) args.push('--skill', skillPath)
-    }
-    for (const injection of extensionInjections('prime')) {
-      const extensionPath = input.environment[injection.environmentVariable]
-      if (extensionPath && !unsafeArgValue(extensionPath)) args.push('--extension', extensionPath)
-    }
-    return args
-  },
-  translateCommand: (command) => command,
-  normalizeEvent: (event) => event,
-  buildServiceTierCommand: (serviceTier) => ({ type: 'set_service_tier', serviceTier }),
-  readState: (data) => data.serviceTier === 'default' || data.serviceTier === 'priority' ? { serviceTier: data.serviceTier } : {},
 }
 
 const OMP_UNSUPPORTED_COMMANDS = new Set([
@@ -199,10 +171,11 @@ export const OMP_RPC_ADAPTER: HarnessRpcAdapter = {
 }
 
 /**
- * Base pi speaks Prime's request/response envelope, command vocabulary, and
+ * Base pi speaks the shared request/response envelope, command vocabulary, and
  * event names with no handshake extras: no ready frame, no protocol
- * negotiation, no chunked frames. The Prime-only daemon/heartbeat family is
- * missing; fast mode is supplied by Catfish-Pi's bundled compatibility extension.
+ * negotiation, no chunked frames. The retired prime harness's
+ * daemon/heartbeat family is missing; fast mode is supplied by Catfish-Pi's
+ * bundled compatibility extension.
  */
 export const PI_RPC_ADAPTER: HarnessRpcAdapter = {
   id: 'pi',
@@ -233,9 +206,9 @@ export const PI_RPC_ADAPTER: HarnessRpcAdapter = {
   },
   translateCommand: (command) => {
     const type = String(command.type)
-    // pi keeps Prime's vocabulary (fork/get_fork_messages pass through
-    // untranslated) but lacks the same Prime-only daemon/heartbeat family OMP
-    // rejects, clone included.
+    // pi keeps the shared vocabulary (fork/get_fork_messages pass through
+    // untranslated) but lacks the daemon/heartbeat family OMP rejects, clone
+    // included.
     if (OMP_UNSUPPORTED_COMMANDS.has(type)) throw new Error(`RPC command ${type} is not supported by the Pi harness`)
     return stripStreamingBehavior(command)
   },

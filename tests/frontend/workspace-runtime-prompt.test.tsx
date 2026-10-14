@@ -7,11 +7,11 @@ import { useWorkspaceRuntime } from '../../src/hooks/useWorkspaceRuntime'
 import type { HarnessId, PrimeWorkApi, ProjectRecord, SessionRecord, TranscriptMessage } from '../../src/types/api'
 
 const project: ProjectRecord = {
-  id: 'project', harness: 'prime', name: 'Project', path: '/project', folders: ['/project'], primaryFolder: '/project',
+  id: 'project', harness: 'pi', name: 'Project', path: '/project', folders: ['/project'], primaryFolder: '/project',
   pinned: false, createdAt: '2026-01-01T00:00:00.000Z', lastOpenedAt: '2026-01-01T00:00:00.000Z', sessionCount: 1,
 }
 const session: SessionRecord = {
-  id: 'session', harness: 'prime', filePath: '/sessions/session.jsonl', projectPath: '/project', title: 'Session',
+  id: 'session', harness: 'pi', filePath: '/sessions/session.jsonl', projectPath: '/project', title: 'Session',
   createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', status: 'idle', depth: 0,
 }
 
@@ -20,7 +20,7 @@ let latest: Workspace
 
 function Probe({
   bridge,
-  harness = 'prime',
+  harness = 'pi',
   initialProject = project,
   initialSession = session,
   sessions = [session],
@@ -112,7 +112,7 @@ describe('prompt admission versus background transcript reads', () => {
     expect(latest.pendingQueuedPrompts.map((prompt) => prompt.text)).toEqual(['other thread follow-up'])
   })
 
-  it.each(['prime', 'omp', 'pi'] as const)('promotes an acknowledged %s steer into history while leaving true queued prompts pending', (harness) => {
+  it.each(['omp', 'pi'] as const)('promotes an acknowledged %s steer into history while leaving true queued prompts pending', (harness) => {
     let flushFrame: FrameRequestCallback | undefined
     vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => { flushFrame = callback; return 1 }))
     vi.stubGlobal('cancelAnimationFrame', vi.fn())

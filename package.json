@@ -1,8 +1,8 @@
 {
   "name": "catfish-pi",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
-  "description": "A desktop workspace for Pi, OMP, and Prime Agent (forked from GooeyPi)",
+  "description": "A desktop workspace for Pi and OMP (forked from GooeyPi)",
   "main": "out/main/index.js",
   "desktopName": "catfish-pi.desktop",
   "author": {
@@ -13,20 +13,20 @@
   "type": "module",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "npm run typecheck && npm run build:bundle",
+    "build": "pnpm run typecheck && pnpm run build:bundle",
     "build:bundle": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.tests.json && tsc --noEmit -p tsconfig.scripts.json && tsc --noEmit -p tsconfig.extensions.json",
     "lint": "biome lint --config-path=scripts/release/biome.json electron src tests scripts assets/extensions electron.vite.config.ts playwright.config.ts vitest.config.ts",
     "format:check": "biome format --config-path=scripts/release/biome.json scripts/release electron.vite.config.ts vitest.config.ts playwright.config.ts tests/release-scripts.test.ts",
-    "check": "npm run lint && npm run format:check",
+    "check": "pnpm run lint && pnpm run format:check",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "npm run build && npm run test:e2e:hermetic",
+    "test:e2e": "pnpm run build && pnpm run test:e2e:hermetic",
     "test:e2e:hermetic": "playwright test",
-    "release:verify": "npm run release:verify:package && npm run test:e2e:hermetic",
-    "release:verify:package": "node scripts/release/preflight.mjs --toolchain-only && npm run vendor:verify-patches && npm run typecheck && npm run check && npm run test:coverage && npm run build:bundle && npm run release:bundle-size",
+    "release:verify": "pnpm run release:verify:package && pnpm run test:e2e:hermetic",
+    "release:verify:package": "node scripts/release/preflight.mjs --toolchain-only && pnpm run vendor:verify-patches && pnpm run typecheck && pnpm run check && pnpm run test:coverage && pnpm run build:bundle && pnpm run release:bundle-size",
     "release:bundle-size": "node scripts/release/preflight.mjs --toolchain-only && node scripts/release/verify-bundle-size.mjs",
     "audit:production": "node scripts/release/audit-production.mjs",
     "vendor:verify-patches": "node scripts/release/verify-vendor-patches.mjs",
@@ -38,23 +38,14 @@
     "package:win:local-qa": "node scripts/release/package.mjs --qa --platform win",
     "release:preflight": "node scripts/release/preflight.mjs",
     "release:preflight:toolchain": "node scripts/release/preflight.mjs --toolchain-only",
-    "toolchain:bootstrap": "node scripts/release/bootstrap-npm.mjs",
     "postinstall": "node scripts/release/install-app-deps.mjs"
   },
   "dependencies": {
+    "@earendil-works/pi-ai": "file:vendor/prime-agent-ai-0.7.0-gooeypi.1.tgz",
     "electron-updater": "^6.8.9",
     "js-yaml": "^5.4.3",
     "node-pty": "^1.1.0",
-    "prime-agent": "file:vendor/prime-agent-0.7.0-gooeypi.1.tgz",
-    "prime-agent-ai": "file:vendor/prime-agent-ai-0.7.0-gooeypi.1.tgz",
-    "rrule": "^2.8.1",
-    "zeromq": "^6.1.2"
-  },
-  "overrides": {
-    "@earendil-works/pi-agent-core": "file:vendor/prime-agent-core-0.7.0.tgz",
-    "@earendil-works/pi-ai": "$prime-agent-ai",
-    "@earendil-works/pi-tui": "file:vendor/prime-agent-tui-0.7.0.tgz",
-    "extract-zip": "npm:@electron-internal/extract-zip@1.0.5"
+    "rrule": "^2.8.1"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.8",
@@ -91,14 +82,7 @@
     },
     "files": [
       "out/**/*",
-      "package.json",
-      "!**/node_modules/prime-agent/docs/**",
-      "!**/node_modules/prime-agent/dist/bundle/**",
-      "!**/node_modules/prime-agent/dist/modes/**",
-      "!**/node_modules/prime-agent/**/*.map",
-      "!**/node_modules/prime-agent/**/*.d.ts",
-      "!**/node_modules/@earendil-works/pi-tui/**",
-      "!**/node_modules/koffi/**"
+      "package.json"
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
@@ -117,28 +101,18 @@
       "notarize": true,
       "asarUnpack": [
         "**/node_modules/node-pty/build/Release/pty.node",
-        "**/node_modules/node-pty/build/Release/spawn-helper",
-        "**/node_modules/zeromq/build/darwin/${arch}/node/*-Release/addon.node"
+        "**/node_modules/node-pty/build/Release/spawn-helper"
       ],
       "files": [
         "out/**/*",
         "package.json",
-        "!**/node_modules/prime-agent/docs/**",
-        "!**/node_modules/prime-agent/dist/bundle/**",
-        "!**/node_modules/prime-agent/dist/modes/**",
-        "!**/node_modules/prime-agent/**/*.map",
-        "!**/node_modules/prime-agent/**/*.d.ts",
-        "!**/node_modules/@earendil-works/pi-tui/**",
-        "!**/node_modules/koffi/**",
-        "!**/node_modules/zeromq/build/linux/**",
-        "!**/node_modules/zeromq/build/win32/**",
         "!**/node_modules/extract-zip/index.linux-*.node",
         "!**/node_modules/extract-zip/index.win32-*.node"
       ]
     },
     "linux": {
       "category": "Development",
-      "synopsis": "A desktop workspace for Pi, OMP, and Prime Agent (forked from GooeyPi)",
+      "synopsis": "A desktop workspace for Pi and OMP (forked from GooeyPi)",
       "syncDesktopName": true,
       "target": [
         "AppImage",
@@ -149,21 +123,11 @@
       "artifactName": "${productName}-${version}-linux-${arch}.${ext}",
       "icon": "assets/icon.png",
       "asarUnpack": [
-        "**/node_modules/node-pty/build/Release/pty.node",
-        "**/node_modules/zeromq/build/linux/${arch}/node/*-Release/addon.node"
+        "**/node_modules/node-pty/build/Release/pty.node"
       ],
       "files": [
         "out/**/*",
         "package.json",
-        "!**/node_modules/prime-agent/docs/**",
-        "!**/node_modules/prime-agent/dist/bundle/**",
-        "!**/node_modules/prime-agent/dist/modes/**",
-        "!**/node_modules/prime-agent/**/*.map",
-        "!**/node_modules/prime-agent/**/*.d.ts",
-        "!**/node_modules/@earendil-works/pi-tui/**",
-        "!**/node_modules/koffi/**",
-        "!**/node_modules/zeromq/build/darwin/**",
-        "!**/node_modules/zeromq/build/win32/**",
         "!**/node_modules/extract-zip/index.darwin-*.node",
         "!**/node_modules/extract-zip/index.win32-*.node"
       ]
@@ -183,21 +147,11 @@
         "**/node_modules/node-pty/prebuilds/win32-${arch}/winpty-agent.exe",
         "**/node_modules/node-pty/prebuilds/win32-${arch}/winpty.dll",
         "**/node_modules/node-pty/prebuilds/win32-${arch}/conpty/OpenConsole.exe",
-        "**/node_modules/node-pty/prebuilds/win32-${arch}/conpty/conpty.dll",
-        "**/node_modules/zeromq/build/win32/${arch}/node/*-Release/addon.node"
+        "**/node_modules/node-pty/prebuilds/win32-${arch}/conpty/conpty.dll"
       ],
       "files": [
         "out/**/*",
         "package.json",
-        "!**/node_modules/prime-agent/docs/**",
-        "!**/node_modules/prime-agent/dist/bundle/**",
-        "!**/node_modules/prime-agent/dist/modes/**",
-        "!**/node_modules/prime-agent/**/*.map",
-        "!**/node_modules/prime-agent/**/*.d.ts",
-        "!**/node_modules/@earendil-works/pi-tui/**",
-        "!**/node_modules/koffi/**",
-        "!**/node_modules/zeromq/build/darwin/**",
-        "!**/node_modules/zeromq/build/linux/**",
         "!**/node_modules/extract-zip/index.darwin-*.node",
         "!**/node_modules/extract-zip/index.linux-*.node"
       ]
@@ -245,7 +199,7 @@
   },
   "engines": {
     "node": ">=24.15.0",
-    "npm": ">=12.0.2"
+    "pnpm": ">=12.11.2"
   },
-  "packageManager": "npm@12.0.2"
+  "packageManager": "pnpm@12.11.2"
 }

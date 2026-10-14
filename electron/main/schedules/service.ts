@@ -210,7 +210,7 @@ export class AutomationService {
     return { timing, occurrences: previewScheduleOccurrences(timing, count, now) }
   }
 
-  async create(inputValue: unknown, createdBy: 'user' | 'agent' = 'user', harness: HarnessId = 'prime'): Promise<AutomationScheduleRecord> {
+  async create(inputValue: unknown, createdBy: 'user' | 'agent' = 'user', harness: HarnessId = 'pi'): Promise<AutomationScheduleRecord> {
     const now = this.now()
     const input = parseInput(inputValue, now)
     this.options.validatePrompt?.(input.prompt, harness)

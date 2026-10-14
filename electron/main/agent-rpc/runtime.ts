@@ -9,7 +9,7 @@ import { canonicalSessionPath } from '../session-paths'
 import { errorMessage, isRecord } from '../validation'
 import { redactedStderrTail } from '../lib/process-detail'
 import { AgentEventForwarder } from './events'
-import { PRIME_RPC_ADAPTER, parseContextUsage, parseSessionUsage, type HarnessRpcAdapter } from './harness-adapter'
+import { parseContextUsage, parseSessionUsage, type HarnessRpcAdapter } from './harness-adapter'
 import { LiveContextUsageTracker, withLiveContextUsage } from './context-usage'
 import { FramedRpcTransport, type QueuedRpcWrite } from './transport'
 import type { RpcObject } from './types'
@@ -99,7 +99,7 @@ export class RpcRuntime {
   // outside info so get_state refreshes (which report isStreaming false
   // during the backoff) cannot clear it.
   private retryPending = false
-  // Compaction watchdog: some Prime Agent event paths buffer compaction_start
+  // Compaction watchdog: some harness event paths buffer compaction_start
   // until the surrounding RPC command settles, so the desktop would learn
   // about a compaction only after it finished. get_state responses are never
   // buffered, so polling the compacting flag while the runtime is active lets
@@ -125,9 +125,9 @@ export class RpcRuntime {
     cwd: string,
     onEvent: (envelope: PrimeEventEnvelope) => void,
     private readonly onExit: (runtime: RpcRuntime) => void,
-    extraEnvironment: NodeJS.ProcessEnv = {},
-    watchdogTimings: Partial<CompactionWatchdogTimings> = {},
-    private readonly adapter: HarnessRpcAdapter = PRIME_RPC_ADAPTER,
+    extraEnvironment: NodeJS.ProcessEnv,
+    watchdogTimings: Partial<CompactionWatchdogTimings>,
+    private readonly adapter: HarnessRpcAdapter,
     private readonly chunkAssemblyTiming: RpcChunkAssemblyTiming = DEFAULT_RPC_CHUNK_ASSEMBLY_TIMING,
   ) {
     this.watchdogTimings = { ...DEFAULT_COMPACTION_WATCHDOG_TIMINGS, ...watchdogTimings }
@@ -678,7 +678,7 @@ export class RpcRuntime {
         this.emit({ type: 'session_usage', sessionUsage })
       }
       if (usage) this.applyAuthoritativeContextUsage(usage, request.activityTokens)
-    } catch { /* older Prime Agent versions may not expose session stats */ }
+    } catch { /* older harness versions may not expose session stats */ }
   }
 
   private applyAuthoritativeContextUsage(usage: PrimeContextUsage, activityTokens?: number): void {

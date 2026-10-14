@@ -1,0 +1,8 @@
+verifyDepsBeforeRun: false
+blockExoticSubdeps: true
+allowBuilds:
+  electron: true
+  node-pty: true
+overrides:
+  '@earendil-works/pi-ai': file:vendor/prime-agent-ai-0.7.0-gooeypi.1.tgz
+  extract-zip: npm:@electron-internal/extract-zip@1.0.5

@@ -2,7 +2,7 @@ import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { HarnessId, PluginCatalog, ProcessOutcome, SkillRecord } from '../../src/types/api'
-import { PI_MCP_ADAPTER_REQUIRED_DETAIL, PRIME_MCP_MANAGEMENT_UNAVAILABLE_DETAIL } from '../../src/lib/mcp-policy'
+import { PI_MCP_ADAPTER_REQUIRED_DETAIL } from '../../src/lib/mcp-policy'
 import { HARNESSES } from './harness'
 import { createAdmissionQueue, createSingleFlight } from './lib/async'
 import { resolveExecutable, type ExecutableSource } from './process-utils'
@@ -11,13 +11,13 @@ import { discoverPlugins } from './plugins/catalog'
 import { readAtMost } from './plugins/file-io'
 import { acquireSettingsLock, prepareProjectSettingsPath, removeMcpDefinition, settingsFingerprint, updateMcpSettings, updateMcpState, updatePackageState, validateCapabilityMutation, validateMcpConnection, validateMcpStateInput } from './plugins/mcp'
 import type { ProjectSettingsPath } from './plugins/mcp'
-import { executeOmpPluginAction, executeOmpPluginInstall, executePackageInstall, executePackageRemove, executePiPluginInstall, executePiPluginRemove, validatePackageSource } from './plugins/package-execution'
+import { executeOmpPluginAction, executeOmpPluginInstall, executePiPluginInstall, executePiPluginRemove, validatePackageSource } from './plugins/package-execution'
 import { installOmpExtension, validateExtensionInstallInput } from './plugins/extension-installation'
 
 type PluginDiscovery = typeof discoverPlugins
 
 interface PluginServiceOptions {
-  harness?: HarnessId
+  harness: HarnessId
   agentDir?: string
   discover?: PluginDiscovery
   builtInSkills?: SkillRecord[] | (() => SkillRecord[] | Promise<SkillRecord[]>)
@@ -104,9 +104,9 @@ export class PluginService {
   constructor(
     private readonly agentPath: ExecutableSource,
     private readonly authorizeProject: (path: string) => Promise<string>,
-    options: PluginServiceOptions = {},
+    options: PluginServiceOptions,
   ) {
-    this.harness = options.harness ?? 'prime'
+    this.harness = options.harness
     this.agentDir = options.agentDir ?? HARNESSES[this.harness].agentDir(homedir())
     this.discoverCatalog = options.discover ?? discoverPlugins
     const builtInSkills = options.builtInSkills
@@ -134,7 +134,7 @@ export class PluginService {
 
   private async discover(safeProjectPath: string | undefined, ownerKey: string): Promise<PluginCatalog> {
     if (safeProjectPath) this.lastProjectPath = safeProjectPath
-    const result = await this.discoverCatalog(this.agentDir, safeProjectPath, resolveExecutable(this.agentPath), this.harness)
+    const result = await this.discoverCatalog(this.agentDir, safeProjectPath, this.harness)
     const builtInSkills = await this.builtInSkills()
     const piMcpState = this.harness === 'pi' ? await this.piMcpAdapterState() : undefined
     const harnessCapabilities: SkillRecord[] = this.harness === 'pi' ? [{
@@ -182,23 +182,21 @@ export class PluginService {
     const agentPath = resolveExecutable(this.agentPath)
     if (!agentPath) return { ok: false, reason: 'blocked', output: `${HARNESSES[this.harness].agentName} executable was not found` }
     const source = validatePackageSource(sourceValue, { allowOmpMarketplaceTarget: this.harness === 'omp' })
-    // Pi and Prime record installed sources in the agent settings.json; OMP
-    // tracks installs through its plugin lock file.
+    // Pi records installed sources in the agent settings.json; OMP tracks
+    // installs through its plugin lock file.
     const settingsPath = this.harness === 'omp' ? join(this.agentDir, '..', 'plugins', 'omp-plugins.lock.json') : join(this.agentDir, 'settings.json')
     const install = async (): Promise<ProcessOutcome> => {
-      // Prime and Pi own the settings.json lock while their package commands are
-      // running. Taking that same lock here makes the child fail or deadlock
-      // against Catfish-Pi. Keep a separate app coordination lock so multiple
-      // Catfish-Pi windows serialize package mutations while the CLI remains free
-      // to protect its own settings file.
+      // Pi owns the settings.json lock while its package commands are running.
+      // Taking that same lock here makes the child fail or deadlock against
+      // Catfish-Pi. Keep a separate app coordination lock so multiple
+      // Catfish-Pi windows serialize package mutations while the CLI remains
+      // free to protect its own settings file.
       const lockPath = this.harness === 'omp' ? settingsPath : `${settingsPath}.catfishpi`
       const release = await acquireSettingsLock(lockPath)
       try {
         return this.harness === 'omp'
           ? await executeOmpPluginInstall(agentPath, source)
-          : this.harness === 'pi'
-            ? await executePiPluginInstall(agentPath, source)
-            : await executePackageInstall(agentPath, source)
+          : await executePiPluginInstall(agentPath, source)
       } finally {
         await release()
       }
@@ -222,7 +220,7 @@ export class PluginService {
     if (!agentPath) return { ok: false, reason: 'blocked', output: `${HARNESSES[this.harness].agentName} executable was not found` }
     const projectSettings = safeProjectPath
       ? await prepareProjectSettingsPath(safeProjectPath, {
-          segments: this.harness === 'prime' ? ['.prime', 'agent'] : ['.pi'],
+          segments: ['.pi'],
           filename: 'settings.json',
         })
       : undefined
@@ -231,9 +229,7 @@ export class PluginService {
       const lockPath = `${settingsPath}.catfishpi`
       const release = await acquireSettingsLock(lockPath, projectSettings?.verify)
       try {
-        return this.harness === 'pi'
-          ? await executePiPluginInstall(agentPath, input.source, safeProjectPath)
-          : await executePackageInstall(agentPath, input.source, safeProjectPath)
+        return await executePiPluginInstall(agentPath, input.source, safeProjectPath)
       } finally {
         await release()
       }
@@ -270,7 +266,6 @@ export class PluginService {
 
   async connectMcp(inputValue: unknown): Promise<ProcessOutcome> {
     const input = validateMcpConnection(inputValue, this.harness)
-    if (this.harness === 'prime') throw new TypeError(PRIME_MCP_MANAGEMENT_UNAVAILABLE_DETAIL)
     const piAdmissionFailure = await this.piMcpAdmissionFailure()
     if (piAdmissionFailure) return piAdmissionFailure
     let settingsTarget: string | ProjectSettingsPath
@@ -286,11 +281,9 @@ export class PluginService {
 
     const options = this.harness === 'omp' ? {
       agentName: 'OMP',
-      harness: this.harness,
       schema: 'https://raw.githubusercontent.com/can1357/oh-my-pi/main/packages/coding-agent/src/config/mcp-schema.json',
     } : {
       agentName: 'Pi',
-      harness: this.harness,
       includeType: false,
       successMessage: `Saved MCP server definition “${input.name}”. Start a new Pi session to load it through pi-mcp-adapter.`,
     }
@@ -315,7 +308,6 @@ export class PluginService {
 
   async setMcpEnabled(inputValue: unknown): Promise<ProcessOutcome> {
     const input = validateMcpStateInput(inputValue, this.harness)
-    if (this.harness === 'prime') return { ok: false, reason: 'blocked', output: PRIME_MCP_MANAGEMENT_UNAVAILABLE_DETAIL }
     const piAdmissionFailure = await this.piMcpAdmissionFailure()
     if (piAdmissionFailure) return piAdmissionFailure
     let settingsTarget: string | ProjectSettingsPath
@@ -340,7 +332,7 @@ export class PluginService {
           settingsTarget,
           input,
           (path) => this.settingsFingerprint(path),
-          { agentName, harness: this.harness },
+          { agentName },
         )
       } finally {
         await releaseSettings()
@@ -350,9 +342,6 @@ export class PluginService {
 
   async mutateCapability(inputValue: unknown): Promise<ProcessOutcome> {
     const input = validateCapabilityMutation(inputValue, this.harness)
-    if (input.kind === 'mcp' && input.action !== 'remove' && this.harness === 'prime') {
-      return { ok: false, reason: 'blocked', output: PRIME_MCP_MANAGEMENT_UNAVAILABLE_DETAIL }
-    }
     if (input.kind === 'mcp' && input.action !== 'remove') {
       const piAdmissionFailure = await this.piMcpAdmissionFailure()
       if (piAdmissionFailure) return piAdmissionFailure
@@ -362,11 +351,9 @@ export class PluginService {
       : undefined
     if (safeProjectPath) this.lastProjectPath = safeProjectPath
     const projectSettings = safeProjectPath
-      ? await prepareProjectSettingsPath(safeProjectPath, this.harness === 'prime'
-          ? undefined
-          : { segments: [this.harness === 'omp' ? '.omp' : '.pi'], filename: input.kind === 'mcp' ? 'mcp.json' : 'settings.json' })
+      ? await prepareProjectSettingsPath(safeProjectPath, { segments: [this.harness === 'omp' ? '.omp' : '.pi'], filename: input.kind === 'mcp' ? 'mcp.json' : 'settings.json' })
       : undefined
-    const settingsPath = projectSettings?.path ?? join(this.agentDir, input.kind === 'mcp' && this.harness !== 'prime' ? 'mcp.json' : 'settings.json')
+    const settingsPath = projectSettings?.path ?? join(this.agentDir, input.kind === 'mcp' ? 'mcp.json' : 'settings.json')
     const agentName = HARNESSES[this.harness].agentName
     const mutate = async (): Promise<ProcessOutcome> => {
       const releaseSettings = await acquireSettingsLock(`${settingsPath}.catfishpi`, projectSettings?.verify)
@@ -375,7 +362,7 @@ export class PluginService {
           if (input.action !== 'remove') {
             const piAdmissionFailure = await this.piMcpAdmissionFailure()
             if (piAdmissionFailure) return piAdmissionFailure
-            return await updateMcpState(projectSettings ?? settingsPath, { ...input, enabled: input.action === 'enable' }, (path) => this.settingsFingerprint(path), { agentName, harness: this.harness })
+            return await updateMcpState(projectSettings ?? settingsPath, { ...input, enabled: input.action === 'enable' }, (path) => this.settingsFingerprint(path), { agentName })
           }
           return await removeMcpDefinition(projectSettings ?? settingsPath, input, (path) => this.settingsFingerprint(path), { agentName })
         }
@@ -388,9 +375,7 @@ export class PluginService {
         if (input.action !== 'remove') return await updatePackageState(projectSettings ?? settingsPath, input, (path) => this.settingsFingerprint(path), { agentName })
         const agentPath = resolveExecutable(this.agentPath)
         if (!agentPath) return { ok: false, reason: 'blocked', output: `${agentName} executable was not found` }
-        return this.harness === 'pi'
-          ? await executePiPluginRemove(agentPath, input.source!, safeProjectPath)
-          : await executePackageRemove(agentPath, input.source!, safeProjectPath)
+        return await executePiPluginRemove(agentPath, input.source!, safeProjectPath)
       } finally {
         await releaseSettings()
       }

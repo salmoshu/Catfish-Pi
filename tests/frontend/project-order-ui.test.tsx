@@ -11,7 +11,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const project = (id: string, name: string, lastOpenedAt: string, overrides: Partial<ProjectRecord> = {}): ProjectRecord => ({
   id,
-  harness: 'prime',
+  harness: 'pi',
   name,
   path: `/${id}`,
   folders: [`/${id}`],
@@ -34,19 +34,18 @@ const meta: AppMeta = {
   platform: 'linux',
   homeDir: '/home/test',
   harnesses: {
-    prime: { path: '/usr/bin/prime', version: 'test' },
     omp: { path: null, version: null },
     pi: { path: null, version: null },
   },
 }
 
-let settings = { ...DEFAULT_SETTINGS, activeHarness: 'prime' as const }
+let settings = { ...DEFAULT_SETTINGS, activeHarness: 'pi' as const }
 let bridge: PrimeWorkApi
 let container: HTMLDivElement
 let root: Root
 
 beforeEach(() => {
-  settings = { ...DEFAULT_SETTINGS, activeHarness: 'prime' }
+  settings = { ...DEFAULT_SETTINGS, activeHarness: 'pi' }
   bridge = {
     app: {
       getMeta: vi.fn(async () => meta),
@@ -205,7 +204,7 @@ describe('project ordering controls in App', () => {
     const pin = [...container.querySelectorAll('[aria-label^="Project options"] button')].find((button) => button.textContent?.includes('Pin project'))
     expect(pin).toBeDefined()
     await press(pin!)
-    expect(bridge.projects.setPinned).toHaveBeenCalledWith('alpha', true, 'prime')
+    expect(bridge.projects.setPinned).toHaveBeenCalledWith('alpha', true, 'pi')
     expect([...container.querySelectorAll('[aria-label^="Project options"] button')].some((button) => button.textContent?.includes('Pin project'))).toBe(false)
   })
 })

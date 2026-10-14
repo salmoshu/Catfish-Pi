@@ -38,14 +38,13 @@ export interface WorkspaceActionsDeps {
   setToast: Dispatch<SetStateAction<string | null>>
   setSubmitting: Dispatch<SetStateAction<boolean>>
   refreshSchedules(): Promise<void>
-  refreshHeartbeats(): Promise<void>
   resetBrowserView(): void
   closeTerminalForSession(sessionPath: string): void
   clearSessionAttention(session: SessionRecord): void
   reportError(error: unknown): void
 }
 
-export type McpCommand = { type: 'open' } | { type: 'authenticate'; server?: string }
+export type McpCommand = { type: 'authenticate'; server?: string }
 
 interface StartedSessionIndexInput {
   bridge: PrimeWorkApi
@@ -112,7 +111,6 @@ export function parseCompactCommand(prompt: string): { customInstructions?: stri
 
 export function parseMcpCommand(prompt: string, harness: HarnessId): McpCommand | undefined {
   const value = prompt.trim()
-  if (harness === 'prime' && value === '/mcp') return { type: 'open' }
   const authentication = parseMcpAuthenticationCommand(value, harness)
   return authentication
     ? authentication.server ? { type: 'authenticate', server: authentication.server } : { type: 'authenticate' }
@@ -289,11 +287,6 @@ export function createWorkspaceActions(getDeps: () => WorkspaceActionsDeps) {
     const commandHarness = workspace.workspaceRef?.current?.project?.harness ?? settingsState.settings.activeHarness
     const compactCommand = parseCompactCommand(prompt)
     const mcpCommand = parseMcpCommand(prompt, commandHarness)
-    if (mcpCommand?.type === 'open' && images.length === 0) {
-      setView('plugins')
-      setToast('Manage MCP integrations in Capabilities.')
-      return
-    }
     if (mcpCommand?.type === 'authenticate') {
       const target = mcpCommand.server ? ` to sign in to ${mcpCommand.server}` : ' to authenticate network MCP servers'
       setToast(`Network MCP authentication is managed outside Catfish-Pi. Use ${HARNESS_AGENT_NAMES[commandHarness]} directly${target}.`)
@@ -397,7 +390,7 @@ export function createWorkspaceActions(getDeps: () => WorkspaceActionsDeps) {
           const assistantId = `assistant-${Date.now()}`
           workspace.setMessages((items) => [...items, { id: assistantId, role: 'assistant', timestamp: Date.now(), startedAt: Date.now(), streaming: true, parts: [{ type: 'thinking', text: 'Reviewing the request and current workspace context.' }] }])
           demoTimerRef.current.push(window.setTimeout(() => workspace.setMessages((items) => items.map((item) => item.id === assistantId ? { ...item, parts: [...item.parts, { type: 'toolCall', id: 'demo-tool', name: 'Inspect project', args: { cwd: admitted.cwd } }] } : item)), 450))
-          demoTimerRef.current.push(window.setTimeout(() => workspace.setMessages((items) => items.map((item) => item.id === assistantId ? { ...item, streaming: false, completedAt: Date.now(), parts: [...item.parts, { type: 'toolResult', name: 'Inspect project', text: 'Project context loaded' }, { type: 'text', text: 'I’ve reviewed the project context and prepared the workspace. Connect the desktop bridge to run this request with Prime Agent.' }] } : item)), 1_250))
+          demoTimerRef.current.push(window.setTimeout(() => workspace.setMessages((items) => items.map((item) => item.id === assistantId ? { ...item, streaming: false, completedAt: Date.now(), parts: [...item.parts, { type: 'toolResult', name: 'Inspect project', text: 'Project context loaded' }, { type: 'text', text: 'I’ve reviewed the project context and prepared the workspace. Connect the desktop bridge to run this request with Pi or OMP.' }] } : item)), 1_250))
           return
         }
         await grantProject(admitted.project)
@@ -651,11 +644,6 @@ export function createWorkspaceActions(getDeps: () => WorkspaceActionsDeps) {
     if (!bridge) throw new Error('Scheduled tasks are available in the desktop app.')
     try { await operation(); await refreshSchedules() } catch (error) { reportError(error); throw error }
   }
-  const manageHeartbeat = async (id: string, action: 'pause' | 'resume' | 'stop') => {
-    const { bridge, refreshHeartbeats, reportError } = getDeps()
-    if (!bridge) throw new Error('Heartbeats are available in the desktop app.')
-    try { await bridge.heartbeats.manage(id, action); await refreshHeartbeats() } catch (error) { reportError(error); throw error }
-  }
   const openScheduledSession = (sessionFile: string) => {
     const { bridge, sessions, settingsState, setSessions, reportError } = getDeps()
     const known = sessions.find((session) => session.filePath === sessionFile)
@@ -685,7 +673,7 @@ export function createWorkspaceActions(getDeps: () => WorkspaceActionsDeps) {
     grantProject, persistPanel, toggleSidebar, toggleInspector, toggleTerminal,
     selectProject, selectSession, newSession, navigate, renameSession, setSessionArchived,
     addProject, removeProject, togglePinProject, setProjectSortMode, sendPrompt, stopRuntime, installSkill, installExtension, setMcpSupport, connectMcp, setMcpEnabled, mutateCapability,
-    createSchedule, updateSchedule, mutateSchedule, manageHeartbeat, openScheduledSession,
+    createSchedule, updateSchedule, mutateSchedule, openScheduledSession,
     openBrowser, openChanges,
   }
 }

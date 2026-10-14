@@ -130,7 +130,7 @@ const clickSend = async () => {
 describe('Composer session mentions', () => {
   it('closes an accepted mention and only reopens it after editing back into the query', async () => {
     const sessions: SessionRecord[] = [{
-      id: '019f0000-0000-7000-8000-000000000001', harness: 'prime', filePath: '/sessions/browser.jsonl', projectPath: '/project', title: 'Browser',
+      id: '019f0000-0000-7000-8000-000000000001', harness: 'pi', filePath: '/sessions/browser.jsonl', projectPath: '/project', title: 'Browser',
       createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', status: 'idle', depth: 0,
     }]
     renderComposer({ sessions })

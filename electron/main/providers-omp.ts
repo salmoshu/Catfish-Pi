@@ -8,9 +8,9 @@ export const OMP_NOT_INSTALLED_WARNING = 'OMP is not installed. Install the omp 
 
 /**
  * OMP reports the per-model thinking vocabulary as `thinking: string[] | null`
- * using the same level names as Prime, except `off` is implicit (never listed
- * by `omp models --json`). Mirror Prime's `getSupportedThinkingLevels`
- * convention: non-reasoning models expose exactly `['off']`, and reasoning
+ * using the shared level names, except `off` is implicit (never listed
+ * by `omp models --json`). The desktop convention:
+ * non-reasoning models expose exactly `['off']`, and reasoning
  * models expose `off` plus the reported levels in canonical order. Unknown or
  * non-string reported levels are dropped.
  */
@@ -24,8 +24,8 @@ export type OmpModelCatalogOptions = CliModelCatalogOptions
 
 /**
  * Model catalog service for the OMP harness, backed by the `omp models --json`
- * CLI instead of in-process npm modules. Satisfies the same
- * `ModelCatalogProvider` surface as `PrimeProviderService`, so
+ * CLI instead of in-process npm modules. Satisfies the shared
+ * `ModelCatalogProvider` surface, so
  * `AgentRpcManager` and the `providers:catalog` IPC path can consume either.
  *
  * The CLI output is untrusted: it is byte-bounded, time-bounded, spawned with

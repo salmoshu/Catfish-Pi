@@ -1,6 +1,5 @@
 import type { PrimeModelCatalog, PrimeModelDescriptor, PrimeProviderDescriptor } from '../../src/types/api'
 import type { ProviderCatalog } from './agent-rpc'
-import type { PrimeProviderService } from './providers'
 
 /**
  * The model-catalog surface shared by every agent harness provider service.
@@ -12,8 +11,8 @@ import type { PrimeProviderService } from './providers'
  * - The `providers:catalog` IPC handler calls `catalog(force, disabledProviders, disabledModels)`.
  *
  * Auth mutations (API keys, logout, OAuth flows) are intentionally excluded:
- * the manager never touches them and they are Prime-specific — OMP
- * authentication is owned by the omp CLI itself.
+ * the manager never touches them — OMP and pi authentication is owned by
+ * their CLIs.
  */
 export interface ModelCatalogProvider extends ProviderCatalog {
   catalog(force?: boolean, disabledProviders?: ReadonlySet<string>, disabledModels?: ReadonlySet<string>): Promise<PrimeModelCatalog>
@@ -103,10 +102,3 @@ export function catalogLimitWarnings(
   }
   return warnings
 }
-
-/**
- * Compile-time proof that PrimeProviderService structurally satisfies the
- * shared surface without editing providers.ts. Harness wiring can use this to
- * hand either service to catalog consumers.
- */
-export const asModelCatalogProvider = (service: PrimeProviderService): ModelCatalogProvider => service

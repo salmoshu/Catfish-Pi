@@ -1,5 +1,0 @@
-{
-  "name": "Catfish-Pi",
-  "user": "ubuntu",
-  "install": "bash .cursor/install.sh"
-}

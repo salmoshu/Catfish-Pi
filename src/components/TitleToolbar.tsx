@@ -51,7 +51,7 @@ interface TitleToolbarProps {
   platform?: NodeJS.Platform
 }
 
-export function TitleToolbar({ project, gitBranch, view, productName = 'Prime Work', sidebarOpen, inspectorOpen, terminalOpen, voiceOpen = false, activeProjectScriptKind, onToggleSidebar, onToggleInspector, onToggleTerminal, onOpenBrowser, onToggleVoice, onRunProjectScript, onStopProjectScript, onSaveProjectScripts, platform = 'darwin' }: TitleToolbarProps) {
+export function TitleToolbar({ project, gitBranch, view, productName = 'Pi Work', sidebarOpen, inspectorOpen, terminalOpen, voiceOpen = false, activeProjectScriptKind, onToggleSidebar, onToggleInspector, onToggleTerminal, onOpenBrowser, onToggleVoice, onRunProjectScript, onStopProjectScript, onSaveProjectScripts, platform = 'darwin' }: TitleToolbarProps) {
   const { t } = useI18n()
   const sidebarShortcut = shortcutLabel(platform, ['Primary', 'B'])
   const terminalShortcut = shortcutLabel(platform, ['Primary', 'J'])

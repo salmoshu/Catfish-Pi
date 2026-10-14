@@ -118,7 +118,7 @@ function ompManager(executable: string, options: { providers?: ProviderCatalog; 
     executable,
     async (cwd) => cwd,
     async (path) => path,
-    options.providers,
+    options.providers ?? ompCatalog,
     () => new Set(),
     OMP_RPC_ADAPTER,
     options.approvalMode ?? (() => undefined),

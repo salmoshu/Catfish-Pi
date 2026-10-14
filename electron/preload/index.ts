@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AgentBrowserActivityEvent, AgentBrowserPointerEvent, AgentBrowserState, AppUpdateState, PrimeEventEnvelope, PrimeWorkApi, ProviderAuthEvent, ScheduleChangeEvent, SessionChangeEvent, TerminalDataEvent, TerminalExitEvent } from '../../src/types/api'
+import type { AgentBrowserActivityEvent, AgentBrowserPointerEvent, AgentBrowserState, AppUpdateState, PrimeEventEnvelope, PrimeWorkApi, ScheduleChangeEvent, SessionChangeEvent, TerminalDataEvent, TerminalExitEvent } from '../../src/types/api'
 
 function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
   if (typeof callback !== 'function') throw new TypeError('callback must be a function')
@@ -78,15 +78,9 @@ const api: PrimeWorkApi = {
   },
   providers: {
     catalog: (force, harness) => invoke('providers:catalog', force, harness),
-    saveApiKey: (providerId, apiKey) => invoke('providers:save-api-key', providerId, apiKey),
-    logout: (providerId) => invoke('providers:logout', providerId),
     setEnabled: (providerId, enabled, harness) => invoke('providers:set-enabled', providerId, enabled, harness),
     setDisabled: (providerIds, harness) => invoke('providers:set-disabled', providerIds, harness),
     setModelEnabled: (modelKey, enabled, harness) => invoke('providers:set-model-enabled', modelKey, enabled, harness),
-    startOAuth: (providerId) => invoke('providers:start-oauth', providerId),
-    respondOAuth: (flowId, promptId, value) => invoke('providers:respond-oauth', flowId, promptId, value),
-    cancelOAuth: (flowId) => invoke('providers:cancel-oauth', flowId),
-    onAuthEvent: (callback) => subscribe<ProviderAuthEvent>('providers:auth-event', callback),
   },
   voice: {
     credentialStatus: () => invoke('voice:credential-status'),
@@ -146,10 +140,6 @@ const api: PrimeWorkApi = {
     onPointer: (callback) => subscribe<AgentBrowserPointerEvent>('browser:pointer', callback),
     onActivity: (callback) => subscribe<AgentBrowserActivityEvent>('browser:activity', callback),
   },
-  heartbeats: {
-    list: () => invoke('heartbeats:list'),
-    manage: (id, action) => invoke('heartbeats:manage', id, action),
-  },
   schedules: {
     list: (harness) => invoke('schedules:list', harness),
     get: (id) => invoke('schedules:get', id),
@@ -165,4 +155,7 @@ const api: PrimeWorkApi = {
 }
 
 for (const domain of Object.values(api)) Object.freeze(domain)
+// `window.prime` is a legacy bridge identifier shared by every supported
+// harness (pi and omp); the name predates the multi-harness split and is kept
+// to avoid churn across the preload/renderer contract.
 contextBridge.exposeInMainWorld('prime', Object.freeze(api))

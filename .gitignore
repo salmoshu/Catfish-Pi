@@ -1,17 +1,46 @@
+# Dependencies and package-manager state
 node_modules
+
+# Build and packaging output
 /out/
 /dist/
 /release/
 /coverage/
+
+# Test and e2e artifacts
 playwright-report
 test-results
+.nyc_output/
+*.tsbuildinfo
+
+# Caches and scratch state
+.vite/
+.cache/
+.eslintcache
+.stylelintcache
+__pycache__/
+
+# OS and editor noise
 .DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.cursor/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Secrets and local environment
 .env
 .env.*
+
+# Logs
+*.log
 .prime-gui.log
+
+# Tool-local state
 .superdesign/
 .claude/worktrees/
-__pycache__/
 .claude/settings.local.json
 
 # bulk scratch/research data (Zed git-checkpoint pipe deadlock guard, 2026-10-12)

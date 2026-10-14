@@ -19,10 +19,10 @@ function fixture() {
   writeFileSync(marker, 'keep')
   const store = new JsonStateStore(join(dir, 'state.json'))
   const session: SessionRecord = {
-    id: 'session', harness: 'prime', filePath: join(dir, 'session.jsonl'), projectPath: folder, title: 'Session',
+    id: 'session', harness: 'pi', filePath: join(dir, 'session.jsonl'), projectPath: folder, title: 'Session',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), status: 'idle', depth: 0,
   }
-  const service = new ProjectService(store, () => null)
+  const service = new ProjectService(store, () => null, 'pi')
   service.bindProviders({ sessions: async () => [session], branch: async () => undefined })
   return { folder, marker, store, session, service }
 }
@@ -32,7 +32,7 @@ describe('project removal', () => {
     const { folder, marker, store, service } = fixture()
     const now = new Date().toISOString()
     await store.update((state) => { state.projects.push({
-      id: 'project-1', harness: 'prime', name: 'Project', path: folder, folders: [folder], primaryFolder: folder,
+      id: 'project-1', harness: 'pi', name: 'Project', path: folder, folders: [folder], primaryFolder: folder,
       pinned: false, createdAt: now, lastOpenedAt: now, folderIdentities: identities(folder),
     }) })
 
@@ -62,8 +62,8 @@ describe('project removal', () => {
     mkdirSync(second)
     const now = new Date().toISOString()
     await store.update((state) => { state.projects.push(
-      { id: 'project-1', harness: 'prime', name: 'First', path: folder, folders: [folder], primaryFolder: folder, pinned: false, createdAt: now, lastOpenedAt: now, folderIdentities: identities(folder) },
-      { id: 'project-2', harness: 'prime', name: 'Second', path: second, folders: [second], primaryFolder: second, pinned: false, createdAt: now, lastOpenedAt: now, folderIdentities: identities(second) },
+      { id: 'project-1', harness: 'pi', name: 'First', path: folder, folders: [folder], primaryFolder: folder, pinned: false, createdAt: now, lastOpenedAt: now, folderIdentities: identities(folder) },
+      { id: 'project-2', harness: 'pi', name: 'Second', path: second, folders: [second], primaryFolder: second, pinned: false, createdAt: now, lastOpenedAt: now, folderIdentities: identities(second) },
     ) })
     let releaseBranch!: () => void
     let markEntered!: () => void
@@ -82,7 +82,7 @@ describe('project removal', () => {
 
     // The removal deny-list is released once removal completes; the lasting
     // block is that the project is no longer authorized at all.
-    await expect(service.authorizeCwd(second)).rejects.toThrow(/not inside an added Prime Work project/)
+    await expect(service.authorizeCwd(second)).rejects.toThrow(/not inside an added Pi Work project/)
   })
 
   it('keeps a nested registered project authorized while and after its parent is removed', async () => {
@@ -91,8 +91,8 @@ describe('project removal', () => {
     mkdirSync(nested)
     const now = new Date().toISOString()
     await store.update((state) => { state.projects.push(
-      { id: 'parent', harness: 'prime', name: 'Parent', path: folder, folders: [folder], primaryFolder: folder, pinned: false, createdAt: now, lastOpenedAt: now, folderIdentities: identities(folder) },
-      { id: 'nested', harness: 'prime', name: 'Nested', path: nested, folders: [nested], primaryFolder: nested, pinned: false, createdAt: now, lastOpenedAt: now, folderIdentities: identities(nested) },
+      { id: 'parent', harness: 'pi', name: 'Parent', path: folder, folders: [folder], primaryFolder: folder, pinned: false, createdAt: now, lastOpenedAt: now, folderIdentities: identities(folder) },
+      { id: 'nested', harness: 'pi', name: 'Nested', path: nested, folders: [nested], primaryFolder: nested, pinned: false, createdAt: now, lastOpenedAt: now, folderIdentities: identities(nested) },
     ) })
     await service.list()
     let releaseStop!: () => void
@@ -113,14 +113,14 @@ describe('project removal', () => {
     await expect(removal).resolves.toBe(true)
 
     await expect(service.authorizeCwd(nested)).resolves.toBe(realpathSync(nested))
-    await expect(service.authorizeCwd(folder)).rejects.toThrow(/not inside an added Prime Work project/)
+    await expect(service.authorizeCwd(folder)).rejects.toThrow(/not inside an added Pi Work project/)
   })
 
   it('releases removal roots and keeps the project working when the store update fails', async () => {
     const { folder, store, service } = fixture()
     const now = new Date().toISOString()
     await store.update((state) => { state.projects.push({
-      id: 'project-1', harness: 'prime', name: 'Project', path: folder, folders: [folder], primaryFolder: folder,
+      id: 'project-1', harness: 'pi', name: 'Project', path: folder, folders: [folder], primaryFolder: folder,
       pinned: false, createdAt: now, lastOpenedAt: now, folderIdentities: identities(folder),
     }) })
     await service.list()
@@ -144,7 +144,7 @@ describe('project removal', () => {
     session.projectPath = secondary
     const now = new Date().toISOString()
     await store.update((state) => { state.projects.push({
-      id: 'project-1', harness: 'prime', name: 'Project', path: primary, folders: [primary, secondary], primaryFolder: primary,
+      id: 'project-1', harness: 'pi', name: 'Project', path: primary, folders: [primary, secondary], primaryFolder: primary,
       pinned: false, createdAt: now, lastOpenedAt: now, folderIdentities: identities(folder),
     }) })
 
@@ -157,7 +157,7 @@ describe('project removal', () => {
     const { folder, store, service } = fixture()
     const now = new Date().toISOString()
     await store.update((state) => { state.projects.push({
-      id: 'project-1', harness: 'prime', name: 'Project', path: folder, folders: [folder], primaryFolder: folder,
+      id: 'project-1', harness: 'pi', name: 'Project', path: folder, folders: [folder], primaryFolder: folder,
       pinned: false, createdAt: now, lastOpenedAt: now, folderIdentities: identities(folder),
     }) })
     await service.list()
@@ -184,7 +184,7 @@ describe('project removal', () => {
     const { folder, store, service } = fixture()
     const now = new Date().toISOString()
     await store.update((state) => { state.projects.push({
-      id: 'project-1', harness: 'prime', name: 'Project', path: folder, folders: [folder], primaryFolder: folder,
+      id: 'project-1', harness: 'pi', name: 'Project', path: folder, folders: [folder], primaryFolder: folder,
       pinned: false, createdAt: now, lastOpenedAt: now, folderIdentities: identities(folder),
     }) })
     await service.list()
@@ -213,7 +213,7 @@ describe('project removal', () => {
   it('revokes inferred project authorization synchronously while session discovery is pending during removal', async () => {
     const { folder, store, session } = fixture()
     // Service has not cached the inferred root in memory yet
-    const service = new ProjectService(store, () => null)
+    const service = new ProjectService(store, () => null, 'pi')
 
     let releaseSessions!: () => void
     let markSessionsStarted!: () => void
@@ -248,10 +248,10 @@ describe('project removal', () => {
 
   it('releases pending removal state when inferred discovery rejects', async () => {
     const { folder, store, session } = fixture()
-    const discovery = new ProjectService(store, () => null)
+    const discovery = new ProjectService(store, () => null, 'pi')
     discovery.bindProviders({ sessions: async () => [session], branch: async () => undefined })
     const [inferred] = await discovery.list()
-    const service = new ProjectService(store, () => null)
+    const service = new ProjectService(store, () => null, 'pi')
     const failure = new Error('session discovery failed')
     let rejectDiscovery = true
     service.bindProviders({

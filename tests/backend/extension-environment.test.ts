@@ -20,7 +20,7 @@ const electron = vi.hoisted(() => ({
 vi.mock('electron', () => electron)
 
 import { extensionRuntimeEnvironment, type CapabilityExtensionPaths } from '../../electron/main/index'
-import { OMP_RPC_ADAPTER, PI_RPC_ADAPTER, PRIME_RPC_ADAPTER } from '../../electron/main/agent-rpc'
+import { OMP_RPC_ADAPTER, PI_RPC_ADAPTER } from '../../electron/main/agent-rpc'
 
 const extensionPaths: CapabilityExtensionPaths = {
   schedule: '/app/extensions/omp-work-schedules.ts',
@@ -110,16 +110,7 @@ describe('capability extension environment parity (OMP and pi)', () => {
     expect(adapter.buildStartArgs({ cwd: '/work', environment })).not.toContain(extensionPaths.browser)
   })
 
-  it('injects the bundled ask_user extension into Prime interactive runtimes', () => {
-    const args = PRIME_RPC_ADAPTER.buildStartArgs({
-      cwd: '/work',
-      environment: { PRIME_WORK_ASK_USER_EXTENSION_PATH: extensionPaths.askUser },
-    })
-    expect(args.slice(-2)).toEqual(['--extension', extensionPaths.askUser])
-  })
-
   it.each([
-    ['prime', PRIME_RPC_ADAPTER],
     ['omp', OMP_RPC_ADAPTER],
     ['pi', PI_RPC_ADAPTER],
   ] as const)('injects session collaboration into %s without accepting an unsafe path', (_harness, adapter) => {

@@ -50,7 +50,7 @@ describe('persisted project parsing', () => {
       version: 3,
       projects: [{
         id: 'project-1',
-        harness: 'prime',
+        harness: 'pi',
         name: 'Catfish-Pi',
         path: '/repos/catfish-pi',
         primaryFolder: '/repos/catfish-pi',
@@ -60,7 +60,7 @@ describe('persisted project parsing', () => {
       }],
     })
     expect(projects).toHaveLength(1)
-    expect(projects[0]).toMatchObject({ harness: 'prime', folders: ['/repos/catfish-pi'], pinned: false, lastOpenedAt: '2025-12-02T09:00:00.000Z' })
+    expect(projects[0]).toMatchObject({ harness: 'pi', folders: ['/repos/catfish-pi'], pinned: false, lastOpenedAt: '2025-12-02T09:00:00.000Z' })
     expect(Number.isFinite(Date.parse(projects[0].createdAt))).toBe(true)
     expect(projects[0].folderIdentities).toBeUndefined()
   })
@@ -98,7 +98,7 @@ describe('persisted project parsing', () => {
     })
   })
 
-  it.each([1, 2])('migrates only absent harnesses from recognized pre-harness version %s to Prime', (version) => {
+  it.each([1, 2])('migrates only absent harnesses from recognized pre-harness version %s to pi', (version) => {
     const legacyProject = {
       id: 'legacy-project',
       name: 'Legacy',
@@ -112,7 +112,7 @@ describe('persisted project parsing', () => {
     })
 
     expect(projects).toHaveLength(1)
-    expect(projects[0]).toMatchObject({ id: 'legacy-project', harness: 'prime' })
+    expect(projects[0]).toMatchObject({ id: 'legacy-project', harness: 'pi' })
   })
 
   it.each([3, 4])('drops version %s projects whose harness is absent or unknown', (version) => {
@@ -125,10 +125,11 @@ describe('persisted project parsing', () => {
     }
     const { projects } = loadState({
       version,
-      projects: [project, { ...project, id: 'unknown-project', harness: 'future-harness' }, { ...project, id: 'prime-project', harness: 'prime' }],
+      projects: [project, { ...project, id: 'unknown-project', harness: 'future-harness' }, { ...project, id: 'retired-prime-project', harness: 'prime' }],
     })
 
-    expect(projects.map(({ id, harness }) => ({ id, harness }))).toEqual([{ id: 'prime-project', harness: 'prime' }])
+    // The retired prime harness migrates to pi; absent and unknown harnesses drop.
+    expect(projects.map(({ id, harness }) => ({ id, harness }))).toEqual([{ id: 'retired-prime-project', harness: 'pi' }])
   })
   it('bounds project scripts and preserves setup execution state', () => {
     const project = {
@@ -172,7 +173,7 @@ describe('persisted settings parsing', () => {
       version: 3,
       settings: { runtimePaths: { prime: '/usr/local/bin/prime', omp: 'omp', pi: '/'.padEnd(4_097, 'x') }, enabledHarnesses: ['omp', 'omp', 'ollama'], activeHarness: 'ollama' },
     })
-    expect(settings.runtimePaths).toEqual({ prime: '/usr/local/bin/prime', omp: '', pi: '' })
+    expect(settings.runtimePaths).toEqual({ omp: '', pi: '' })
     expect(settings.enabledHarnesses).toEqual(['omp'])
     expect(settings.activeHarness).toBe('omp')
   })
@@ -204,8 +205,6 @@ describe('persisted settings parsing', () => {
         piDisabledModels: ['openai/gpt-5'],
       },
     })
-    expect(settings.disabledProviders).toEqual(['openai'])
-    expect(settings.disabledModels).toEqual(['openai/gpt-5'])
     expect(settings.ompDisabledProviders).toEqual(['anthropic'])
     expect(settings.ompDisabledModels).toEqual([])
     expect(settings.piDisabledProviders).toEqual([])
@@ -223,8 +222,8 @@ describe('persisted settings parsing', () => {
         },
       },
     })
+    // The retired prime harness key is dropped; malformed entries clear.
     expect(settings.lastSelectedModels).toEqual({
-      prime: 'openai-codex/gpt-5.6-sol',
       omp: '',
       pi: 'anthropic/claude-sonnet-4',
     })
@@ -238,12 +237,12 @@ describe('persisted schedule parsing', () => {
     expect(schedules[0]).toMatchObject({ id: 'schedule-1', harness: 'omp', revision: 2, runs: [] })
   })
 
-  it('migrates an absent version 2 schedule harness to Prime', () => {
+  it('migrates an absent version 2 schedule harness to pi', () => {
     const { harness: _harness, ...legacySchedule } = validSchedule
     const { schedules } = loadState({ version: 2, schedules: [legacySchedule, { ...legacySchedule, id: 'unknown-schedule', harness: 'future-harness' }] })
 
     expect(schedules).toHaveLength(1)
-    expect(schedules[0]).toMatchObject({ id: 'schedule-1', harness: 'prime' })
+    expect(schedules[0]).toMatchObject({ id: 'schedule-1', harness: 'pi' })
   })
 
   it('ignores every schedule in version 1, which predates schedules', () => {

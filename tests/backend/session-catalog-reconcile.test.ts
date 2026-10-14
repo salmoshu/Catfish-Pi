@@ -16,12 +16,18 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createBucketedCatalogIo } from '../../electron/main/sessions/bucketed'
-import { SessionMetadataCatalog, type SessionCatalogEntry, type SessionCatalogIo } from '../../electron/main/sessions/catalog'
+import { createBucketedCatalogIo, timestampFromBucketedSessionName } from '../../electron/main/sessions/bucketed'
+import { SessionMetadataCatalog, type SessionCatalogEntry, type SessionCatalogIo, type SessionNameTimestamp } from '../../electron/main/sessions/catalog'
 import type { SessionMetadata } from '../../electron/main/sessions/metadata'
 
 const root = '/sessions'
 const realDirectories: string[] = []
+
+/** Production name timestamp (pi/OMP ISO prefixes); fixture names encode none and yield `undefined`. */
+const nameTimestamp: SessionNameTimestamp = timestampFromBucketedSessionName
+
+/** Basename tolerant of either separator: the catalog joins paths with the platform separator. */
+const baseName = (path: string): string => path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1)
 
 interface FileState {
   dev: number
@@ -38,7 +44,7 @@ function sessionName(index: number): string {
 }
 
 function metadataFor(filePath: string, version: number): SessionMetadata {
-  const name = filePath.slice(filePath.lastIndexOf('/') + 1, -'.jsonl'.length)
+  const name = baseName(filePath).slice(0, -'.jsonl'.length)
   return {
     id: `${name}-v${version}`,
     filePath,
@@ -91,20 +97,20 @@ function fixture(count: number, maxSessionFiles = count) {
   })))
   const canonicalize = vi.fn(async (path: string) => {
     if (path === root) return root
-    const name = path.slice(path.lastIndexOf('/') + 1)
+    const name = baseName(path)
     const state = files.get(name)
     if (!state) throw Object.assign(new Error('missing'), { code: 'ENOENT' })
-    return state.canonical ?? path
+    return state.canonical ?? `${root}/${name}`
   })
   const inspect = vi.fn(async (path: string) => {
     if (path === root) return fakeDirectoryStats(rootState)
-    const name = path.slice(path.lastIndexOf('/') + 1)
+    const name = baseName(path)
     const state = files.get(name)
     if (!state) throw Object.assign(new Error('missing'), { code: 'ENOENT' })
     return fakeStats(state)
   })
   const inspectLink = vi.fn(async (path: string) => {
-    const name = path.slice(path.lastIndexOf('/') + 1)
+    const name = baseName(path)
     const state = files.get(name)
     if (!state) throw Object.assign(new Error('missing'), { code: 'ENOENT' })
     return {
@@ -114,13 +120,13 @@ function fixture(count: number, maxSessionFiles = count) {
     } as Stats
   })
   const readMetadata = vi.fn(async (filePath: string) => {
-    const name = filePath.slice(filePath.lastIndexOf('/') + 1)
+    const name = baseName(filePath)
     const state = files.get(name)
     if (!state) throw Object.assign(new Error('missing'), { code: 'ENOENT' })
     return metadataFor(filePath, state.version)
   })
   const io: SessionCatalogIo = { readDirectory: entries, canonicalize, inspect, inspectLink }
-  const catalog = new SessionMetadataCatalog(() => root, null, maxSessionFiles, readMetadata, io)
+  const catalog = new SessionMetadataCatalog(() => root, maxSessionFiles, readMetadata, io, nameTimestamp)
   return { catalog, files, entries, canonicalize, inspect, inspectLink, readMetadata }
 }
 
@@ -247,7 +253,7 @@ describe('SessionMetadataCatalog known-file reconciliation', () => {
     await forced.catalog.all()
     Object.assign(forced.files.get(sessionName(0))!, { mtimeMs: 2, size: 110, version: 1 })
     await expect(forced.catalog.reconcileKnownChanges([sessionName(0)])).resolves.toMatchObject({ kind: 'reconciled' })
-    forced.catalog.invalidateLiveCatalog()
+    forced.catalog.invalidate()
     await forced.catalog.all()
     expect(forced.entries).toHaveBeenCalledTimes(2)
   })
@@ -296,9 +302,10 @@ describe('SessionMetadataCatalog known-file reconciliation', () => {
     const fileState: FileState = { dev: 1, ino: 1, mtimeMs: 1, size: 100, version: 0 }
     const entries = vi.fn(async (): Promise<readonly SessionCatalogEntry[]> => [{ name, isFile: () => true }])
     const canonicalize = vi.fn(async (path: string) => {
-      if (path === '/watch') return moved ? '/outside' : root
-      if (path === `/watch/${name}`) return moved ? `/outside/${name}` : `${root}/${name}`
-      return path
+      const normalized = path.replaceAll('\\', '/')
+      if (normalized === '/watch') return moved ? '/outside' : root
+      if (normalized === `/watch/${name}`) return moved ? `/outside/${name}` : `${root}/${name}`
+      return normalized
     })
     const io: SessionCatalogIo = {
       readDirectory: entries,
@@ -310,10 +317,10 @@ describe('SessionMetadataCatalog known-file reconciliation', () => {
     }
     const catalog = new SessionMetadataCatalog(
       () => '/watch',
-      null,
       1,
       async (filePath) => metadataFor(filePath, 0),
       io,
+      nameTimestamp,
     )
     await catalog.all()
     moved = true
@@ -370,10 +377,10 @@ describe('SessionMetadataCatalog known-file reconciliation', () => {
     }
     const catalog = new SessionMetadataCatalog(
       () => watchedRoot,
-      null,
       1,
       async (filePath) => metadataFor(filePath, readFileSync(filePath, 'utf8').length),
       io,
+      nameTimestamp,
     )
     await expect(catalog.all()).resolves.toMatchObject([{ id: 'known-v1' }])
 
@@ -420,7 +427,7 @@ describe('SessionMetadataCatalog known-file reconciliation', () => {
       }
       return { ...metadataFor(filePath, 2), id: 'rescanned-fresh' }
     })
-    const catalog = new SessionMetadataCatalog(() => watchedRoot, null, 1, readMetadata, io)
+    const catalog = new SessionMetadataCatalog(() => watchedRoot, 1, readMetadata, io, nameTimestamp)
     await expect(catalog.all()).resolves.toMatchObject([{ id: 'baseline' }])
 
     appendFileSync(originalFile, '-changed')
@@ -471,7 +478,7 @@ describe('SessionMetadataCatalog known-file reconciliation', () => {
       }
       return { ...metadataFor(path, capturedLength), id: `content-v${capturedLength}` }
     })
-    const catalog = new SessionMetadataCatalog(() => watchedRoot, null, 1, readMetadata, io)
+    const catalog = new SessionMetadataCatalog(() => watchedRoot, 1, readMetadata, io, nameTimestamp)
     await expect(catalog.all()).resolves.toMatchObject([{ id: 'content-v8' }])
 
     appendFileSync(filePath, '-changed')

@@ -6,15 +6,6 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
-import {
-  bootstrapNpm,
-  parsePinnedNpmArtifact,
-  persistNpmCliPath,
-  persistNpmShimDirectory,
-  readPinnedNpmArtifact,
-  resolveNpmGlobalLayout,
-  verifyPinnedNpmArtifact,
-} from '../scripts/release/bootstrap-npm.mjs'
 import { installAppDependencies } from '../scripts/release/install-app-deps.mjs'
 import {
   artifactArchitectures,
@@ -22,16 +13,16 @@ import {
   assertAsarLayout,
   assertExactArchitectures,
   assertPackagedExtensions,
-  assertSupportedNpm,
   assertSupportedNode,
+  assertSupportedPnpm,
   assertSupportedToolchain,
   assertUnpackedNativeLayout,
   expectedUnpackedNativeLayout,
   parseToolchainMetadata,
   parseArchitectures,
   parseTeamIdentifier,
-  readNpmOutput,
-  readNpmVersion,
+  readPnpmOutput,
+  readPnpmVersion,
   readRepositoryToolchain,
   requireReleaseArtifacts,
   resolveCommandInvocation,
@@ -66,7 +57,8 @@ import {
 } from '../scripts/release/verify-cross-platform-package.mjs'
 
 // js-yaml ships no type declarations, so it is required rather than imported.
-const load = createRequire(import.meta.url)('js-yaml').load as (source: string) => unknown
+const yaml = createRequire(import.meta.url)('js-yaml') as { load: (source: string) => unknown; loadAll: (source: string) => unknown[] }
+const load = yaml.load
 
 const baseEnvironment = {
   RELEASE_SIGNING_TEAM_ID: 'TEAM123',
@@ -117,7 +109,6 @@ function writeMacReleaseFixture(directory: string, { omit }: { omit?: string } =
   mkdirSync(projectDirectory, { recursive: true })
   mkdirSync(inputDirectory, { recursive: true })
   writeFileSync(join(projectDirectory, 'package.json'), JSON.stringify({ version: '0.2.0' }))
-  writeFileSync(join(projectDirectory, 'package-lock.json'), JSON.stringify({ version: '0.2.0', packages: { '': { version: '0.2.0' } } }))
   for (const [index, name] of expectedDownloadedReleaseAssets('0.2.0', ['mac']).entries()) {
     if (name === omit) continue
     const artifactDirectory = join(inputDirectory, `artifact-${index}`)
@@ -143,36 +134,6 @@ function createBundleSizeFixture() {
     '<script type="module" src="./assets/entry.js"></script><link rel="modulepreload" href="./assets/vendor.js"><link rel="stylesheet" href="./assets/app.css">',
   )
   return directory
-}
-
-const PINNED_NPM_INTEGRITY = 'sha512-uIXokLlBj6FpNUTQX1PmT5pz7BlIN9QlixX+zdaSNHsd0qUXsbDLr50xzY6Sw7cJVr0uzHKDOle0swmPW/p5Qw=='
-
-function npmArtifactManifest(size: number, overrides: Record<string, unknown> = {}) {
-  return JSON.stringify({
-    artifacts: {
-      npm: {
-        version: '12.0.2',
-        path: 'vendor/npm-12.0.2.tgz',
-        source: 'https://registry.npmjs.org/npm/-/npm-12.0.2.tgz',
-        integrity: PINNED_NPM_INTEGRITY,
-        size,
-        license: 'Artistic-2.0',
-        ...overrides,
-      },
-    },
-  })
-}
-
-function createPinnedNpmArtifactFixture(contents = Buffer.from('verified npm archive fixture')) {
-  const temporaryDirectory = mkdtempSync(join(tmpdir(), 'catfishpi npm artifact & '))
-  const repositoryRoot = join(temporaryDirectory, 'repository with spaces & metacharacters')
-  const artifactPath = join(repositoryRoot, 'vendor', 'npm-12.0.2.tgz')
-  mkdirSync(dirname(artifactPath), { recursive: true })
-  writeFileSync(artifactPath, contents)
-  const integrity = `sha512-${createHash('sha512').update(contents).digest('base64')}`
-  const manifest = npmArtifactManifest(contents.length, { integrity })
-  const artifact = parsePinnedNpmArtifact(manifest, { node: '24.15.0', npm: '12.0.2' }, repositoryRoot)
-  return { temporaryDirectory, repositoryRoot, artifactPath, artifact, manifest, contents, integrity }
 }
 
 describe('release preflight', () => {
@@ -217,15 +178,15 @@ describe('release preflight', () => {
     expect(() => assertBooleanEntitlement(`<key>${entitlement}</key><false/>`, entitlement, 'fixture')).toThrow(/missing required true entitlement/)
   })
 
-  test('enforces the repository Node and npm boundaries from checked-in metadata', () => {
-    expect(readRepositoryToolchain()).toEqual({ node: '24.15.0', npm: '12.0.2' })
+  test('enforces the repository Node and pnpm boundaries from checked-in metadata', () => {
+    expect(readRepositoryToolchain()).toEqual({ node: '24.15.0', pnpm: '12.11.2' })
     expect(() => assertSupportedNode('v24.14.99')).toThrow(/Node\.js >=24\.15\.0 is required/)
     expect(() => assertSupportedNode('v24.15.0')).not.toThrow()
     expect(() => assertSupportedNode('v25.0.0')).not.toThrow()
-    expect(() => assertSupportedNpm('12.0.1')).toThrow(/npm >=12\.0\.2 is required/)
-    expect(() => assertSupportedNpm('12.0.2')).not.toThrow()
-    expect(() => assertSupportedNpm('13.0.0')).not.toThrow()
-    expect(() => assertSupportedToolchain({ nodeVersion: 'v24.15.0', npmVersion: '12.0.2' })).not.toThrow()
+    expect(() => assertSupportedPnpm('12.11.1')).toThrow(/pnpm >=12\.11\.2 is required/)
+    expect(() => assertSupportedPnpm('12.11.2')).not.toThrow()
+    expect(() => assertSupportedPnpm('13.0.0')).not.toThrow()
+    expect(() => assertSupportedToolchain({ nodeVersion: 'v24.15.0', pnpmVersion: '12.11.2' })).not.toThrow()
   })
 
   test('rejects malformed and prerelease tool versions', () => {
@@ -233,307 +194,61 @@ describe('release preflight', () => {
       expect(() => assertSupportedNode(version)).toThrow(/Cannot parse Node\.js version/)
     }
     expect(() => assertSupportedNode('v24.15.0-rc.1')).toThrow(/stable Node\.js release/)
-    for (const version of ['12.0', '12.0.2 trailing', 'not-npm']) {
-      expect(() => assertSupportedNpm(version)).toThrow(/Cannot parse npm version/)
+    for (const version of ['12.11', '12.11.2 trailing', 'not-pnpm']) {
+      expect(() => assertSupportedPnpm(version)).toThrow(/Cannot parse pnpm version/)
     }
-    expect(() => assertSupportedNpm('12.0.2-beta.1')).toThrow(/stable npm release/)
+    expect(() => assertSupportedPnpm('12.11.2-beta.1')).toThrow(/stable pnpm release/)
   })
 
   test('fails closed when checked-in toolchain metadata disagrees', () => {
     const packageMetadata = {
-      engines: { node: '>=24.15.0', npm: '>=12.0.2' },
-      packageManager: 'npm@12.0.2',
+      engines: { node: '>=24.15.0', pnpm: '>=12.11.2' },
+      packageManager: 'pnpm@12.11.2',
     }
-    expect(parseToolchainMetadata(JSON.stringify(packageMetadata), '24.15.0\n')).toEqual({ node: '24.15.0', npm: '12.0.2' })
+    expect(parseToolchainMetadata(JSON.stringify(packageMetadata), '24.15.0\n')).toEqual({ node: '24.15.0', pnpm: '12.11.2' })
     expect(() => parseToolchainMetadata(JSON.stringify(packageMetadata), '24.14.0\n')).toThrow(/\.nvmrc.*engines\.node/)
-    expect(() => parseToolchainMetadata(JSON.stringify({ ...packageMetadata, packageManager: 'npm@12.0.1' }), '24.15.0\n')).toThrow(/packageManager.*engines\.npm/)
+    expect(() => parseToolchainMetadata(JSON.stringify({ ...packageMetadata, packageManager: 'pnpm@12.11.1' }), '24.15.0\n')).toThrow(/packageManager.*engines\.pnpm/)
     expect(() => parseToolchainMetadata(JSON.stringify({ ...packageMetadata, engines: { ...packageMetadata.engines, node: '^24.15.0' } }), '24.15.0\n')).toThrow(/engines\.node must use/)
     expect(() => parseToolchainMetadata(JSON.stringify(packageMetadata), '24.15.0-rc.1\n')).toThrow(/stable \.nvmrc release/)
     expect(() => parseToolchainMetadata('{', '24.15.0\n')).toThrow(/Cannot parse package\.json/)
 
-    for (const path of ['scripts/release/lib.mjs', 'scripts/release/bootstrap-npm.mjs', 'scripts/release/package.mjs', 'scripts/release/preflight.mjs']) {
+    for (const path of ['scripts/release/lib.mjs', 'scripts/release/package.mjs', 'scripts/release/preflight.mjs']) {
       const source = readFileSync(path, 'utf8')
       expect(source).not.toContain('24.15.0')
-      expect(source).not.toContain('12.0.2')
+      expect(source).not.toContain('12.11.2')
     }
   })
 
-  test('binds the npm bootstrap artifact to the packageManager version and canonical registry provenance', () => {
-    const fixture = createPinnedNpmArtifactFixture()
+  test('probes pnpm through its JavaScript lifecycle CLI and both release entry points reject an old pnpm', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'catfishpi-pnpm-version-'))
+    const pnpmCli = join(directory, 'pnpm-cli.mjs')
+    writeFileSync(pnpmCli, "process.stdout.write('12.11.1\\n')\n")
+    const env = { ...process.env, pnpm_execpath: pnpmCli }
     try {
-      expect(fixture.artifact).toMatchObject({
-        version: '12.0.2',
-        relativePath: 'vendor/npm-12.0.2.tgz',
-        path: fixture.artifactPath,
-        source: 'https://registry.npmjs.org/npm/-/npm-12.0.2.tgz',
-        integrity: fixture.integrity,
-        size: fixture.contents.length,
-        license: 'Artistic-2.0',
-      })
-
-      const invalidPins = [
-        npmArtifactManifest(fixture.contents.length, { version: '12.0.1' }),
-        npmArtifactManifest(fixture.contents.length, { path: 'vendor/npm-elsewhere.tgz' }),
-        npmArtifactManifest(fixture.contents.length, { path: '../npm-12.0.2.tgz' }),
-        npmArtifactManifest(fixture.contents.length, { source: 'https://example.invalid/npm-12.0.2.tgz' }),
-        npmArtifactManifest(fixture.contents.length, { integrity: 'sha256-not-strong-enough' }),
-        npmArtifactManifest(fixture.contents.length, { size: 0 }),
-        npmArtifactManifest(fixture.contents.length, { size: 1.5 }),
-        npmArtifactManifest(fixture.contents.length, { license: 'MIT' }),
-        JSON.stringify({ artifacts: {} }),
-        '{',
-      ]
-      for (const source of invalidPins) {
-        expect(() => parsePinnedNpmArtifact(source, { node: '24.15.0', npm: '12.0.2' }, fixture.repositoryRoot)).toThrow(/npm bootstrap artifact|dependency-pins\.json/)
-      }
-    } finally {
-      rmSync(fixture.temporaryDirectory, { recursive: true, force: true })
-    }
-  })
-
-  test('verifies the npm archive before any npm invocation and rejects unsafe artifact state', () => {
-    const fixture = createPinnedNpmArtifactFixture()
-    try {
-      expect(verifyPinnedNpmArtifact(fixture.artifact)).toEqual(fixture.artifact)
-
-      writeFileSync(fixture.artifactPath, Buffer.alloc(fixture.contents.length, 0x78))
-      let npmInvocations = 0
-      expect(() =>
-        bootstrapNpm({
-          artifact: fixture.artifact,
-          nodeVersion: 'v24.15.0',
-          toolchain: { node: '24.15.0', npm: '12.0.2' },
-          readOutput: () => {
-            npmInvocations += 1
-            return 'unexpected'
-          },
-          run: () => {
-            npmInvocations += 1
-          },
-          persist: () => {
-            throw new Error('GITHUB_PATH must not be updated after verification failure')
-          },
-        }),
-      ).toThrow(/integrity does not match/)
-      expect(npmInvocations).toBe(0)
-
-      writeFileSync(fixture.artifactPath, fixture.contents.subarray(0, fixture.contents.length - 1))
-      expect(() => verifyPinnedNpmArtifact(fixture.artifact)).toThrow(/size does not match/)
-      rmSync(fixture.artifactPath)
-      expect(() => verifyPinnedNpmArtifact(fixture.artifact)).toThrow(/does not exist/)
-      expect(() =>
-        verifyPinnedNpmArtifact(fixture.artifact, {
-          lstat: () => ({ isFile: () => false, isSymbolicLink: () => true, size: fixture.contents.length }),
-          readFile: () => fixture.contents,
-        }),
-      ).toThrow(/regular non-symlink file/)
-    } finally {
-      rmSync(fixture.temporaryDirectory, { recursive: true, force: true })
-    }
-  })
-
-  test('probes npm through its JavaScript CLI and both release entry points reject an old npm', () => {
-    const directory = mkdtempSync(join(tmpdir(), 'catfishpi-npm-version-'))
-    const npmCli = join(directory, 'npm-cli.mjs')
-    writeFileSync(npmCli, "process.stdout.write('12.0.1\\n')\n")
-    const env = { ...process.env, npm_execpath: npmCli }
-    try {
-      expect(readNpmVersion({ env })).toBe('12.0.1')
+      expect(readPnpmVersion({ env })).toBe('12.11.1')
       const preflight = spawnSync(process.execPath, ['scripts/release/preflight.mjs', '--toolchain-only'], { encoding: 'utf8', env })
       expect(preflight.status).toBe(1)
-      expect(preflight.stderr).toContain('npm >=12.0.2 is required')
+      expect(preflight.stderr).toContain('pnpm >=12.11.2 is required')
 
       const platform = process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'win' : 'linux'
       const packaging = spawnSync(process.execPath, ['scripts/release/package.mjs', '--qa', '--platform', platform, '--dry-run'], { encoding: 'utf8', env })
       expect(packaging.status).toBe(1)
-      expect(packaging.stderr).toContain('npm >=12.0.2 is required')
+      expect(packaging.stderr).toContain('pnpm >=12.11.2 is required')
     } finally {
       rmSync(directory, { recursive: true, force: true })
     }
   })
 
-  test('derives the exact npm CLI and shim from POSIX and Windows global layouts', () => {
-    expect(resolveNpmGlobalLayout('/opt/npm', '/opt/npm/lib/node_modules', 'linux')).toEqual({
-      prefix: '/opt/npm',
-      root: '/opt/npm/lib/node_modules',
-      cliPath: '/opt/npm/lib/node_modules/npm/bin/npm-cli.js',
-      shimDirectory: '/opt/npm/bin',
-      shimPath: '/opt/npm/bin/npm',
-    })
-    expect(resolveNpmGlobalLayout('C:\\npm\\prefix', 'C:\\npm\\prefix\\node_modules', 'win32')).toEqual({
-      prefix: 'C:\\npm\\prefix',
-      root: 'C:\\npm\\prefix\\node_modules',
-      cliPath: 'C:\\npm\\prefix\\node_modules\\npm\\bin\\npm-cli.js',
-      shimDirectory: 'C:\\npm\\prefix',
-      shimPath: 'C:\\npm\\prefix\\npm.cmd',
-    })
-  })
-
-  test('rejects unsafe or inconsistent npm global layout metadata', () => {
-    expect(() => resolveNpmGlobalLayout('relative', '/opt/npm/lib/node_modules', 'linux')).toThrow(/absolute single-line path/)
-    expect(() => resolveNpmGlobalLayout('/opt/npm\n/injected', '/opt/npm/lib/node_modules', 'linux')).toThrow(/absolute single-line path/)
-    expect(() => resolveNpmGlobalLayout('/opt/npm', '/elsewhere/node_modules', 'linux')).toThrow(/does not match.*prefix/)
-    expect(() => resolveNpmGlobalLayout('C:\\npm\\prefix', 'D:\\other\\node_modules', 'win32')).toThrow(/does not match.*prefix/)
-  })
-
-  test('exact npm CLI verification ignores a stale lifecycle npm_execpath', () => {
-    const directory = mkdtempSync(join(tmpdir(), 'catfishpi exact npm & version-'))
-    const staleCli = join(directory, 'stale-npm-cli.mjs')
-    const installedCli = join(directory, 'installed-npm-cli.mjs')
-    writeFileSync(staleCli, "process.stdout.write('11.12.1\\n')\n")
-    writeFileSync(installedCli, "process.stdout.write('12.0.2\\n')\n")
-    const env = { ...process.env, npm_execpath: staleCli }
+  test('exact pnpm CLI verification ignores a stale lifecycle pnpm_execpath', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'catfishpi exact pnpm & version-'))
+    const staleCli = join(directory, 'stale-pnpm-cli.mjs')
+    const installedCli = join(directory, 'installed-pnpm-cli.mjs')
+    writeFileSync(staleCli, "process.stdout.write('12.11.1\\n')\n")
+    writeFileSync(installedCli, "process.stdout.write('12.11.2\\n')\n")
+    const env = { ...process.env, pnpm_execpath: staleCli }
     try {
-      expect(readNpmOutput(['--version'], { env })).toBe('11.12.1')
-      expect(readNpmOutput(['--version'], { env, npmCliPath: installedCli })).toBe('12.0.2')
-    } finally {
-      rmSync(directory, { recursive: true, force: true })
-    }
-  })
-
-  test('always installs the verified archive and verifies the installed CLI, even when invoked npm reports the pinned version', () => {
-    const fixture = createPinnedNpmArtifactFixture()
-    const staleCli = '/runner/node/lib/node_modules/npm/bin/npm-cli.js'
-    const githubPath = '/runner/github-path'
-    const calls: Array<{ args: string[]; npmCliPath: string | undefined }> = []
-    const runs: Array<{ command: string; args: string[]; shell: boolean }> = []
-    const persisted: Array<{ shimDirectory: string; destination: string | undefined }> = []
-    let installed = false
-    try {
-      const result = bootstrapNpm({
-        artifact: fixture.artifact,
-        env: { npm_execpath: staleCli, GITHUB_PATH: githubPath },
-        nodeVersion: 'v24.15.0',
-        platform: 'linux',
-        toolchain: { node: '24.15.0', npm: '12.0.2' },
-        readOutput: (args: string[], options: { npmCliPath?: string }) => {
-          calls.push({ args, npmCliPath: options.npmCliPath })
-          if (args[0] === 'prefix') return '/runner/npm-global'
-          if (args[0] === 'root') return '/runner/npm-global/lib/node_modules'
-          if (!options.npmCliPath) return '12.0.2'
-          return options.npmCliPath && installed ? '12.0.2' : '11.12.1'
-        },
-        run: (command: string, args: string[], options: { shell?: boolean }) => {
-          installed = true
-          return runs.push({ command, args, shell: options.shell ?? false })
-        },
-        fileExists: () => true,
-        persist: (shimDirectory: string, destination: string | undefined) => {
-          persisted.push({ shimDirectory, destination })
-          return true
-        },
-      })
-
-      expect(runs).toEqual([
-        {
-          command: 'npm',
-          args: ['install', '--global', '--prefix', '/runner/npm-global', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', fixture.artifactPath],
-          shell: false,
-        },
-      ])
-      expect(runs[0]?.args.join(' ')).not.toContain('npm@12.0.2')
-      expect(runs[0]?.args.some((argument) => argument.startsWith('https://'))).toBe(false)
-      expect(calls.at(-1)).toEqual({
-        args: ['--version'],
-        npmCliPath: '/runner/npm-global/lib/node_modules/npm/bin/npm-cli.js',
-      })
-      expect(persisted).toEqual([{ shimDirectory: '/runner/npm-global/bin', destination: githubPath }])
-      expect(result).toMatchObject({ current: '12.0.2', installed: '12.0.2', shimDirectory: '/runner/npm-global/bin', githubPathUpdated: true })
-    } finally {
-      rmSync(fixture.temporaryDirectory, { recursive: true, force: true })
-    }
-  })
-
-  test('executes the installed npm CLI and selects its shim for the next workflow step', () => {
-    const fixture = createPinnedNpmArtifactFixture()
-    const directory = mkdtempSync(join(tmpdir(), 'catfishpi stale npm & bootstrap-'))
-    const prefix = join(directory, 'configured global')
-    const root = process.platform === 'win32' ? join(prefix, 'node_modules') : join(prefix, 'lib', 'node_modules')
-    const layout = resolveNpmGlobalLayout(prefix, root)
-    const staleCli = join(directory, 'stale npm-cli.mjs')
-    const githubPath = join(directory, 'github-path')
-    const expectedInstallArgs = ['install', '--global', '--prefix', prefix, '--offline', '--ignore-scripts', '--no-audit', '--no-fund', fixture.artifactPath]
-    mkdirSync(dirname(staleCli), { recursive: true })
-    writeFileSync(githubPath, '')
-    writeFileSync(
-      staleCli,
-      `import { mkdirSync, writeFileSync } from 'node:fs'
-const args = process.argv.slice(2)
-if (args[0] === '--version') process.stdout.write('11.12.1\\n')
-else if (args[0] === 'prefix') process.stdout.write(${JSON.stringify(`${prefix}\n`)})
-else if (args[0] === 'root') process.stdout.write(${JSON.stringify(`${root}\n`)})
-else if (JSON.stringify(args) === ${JSON.stringify(JSON.stringify(expectedInstallArgs))}) {
-  mkdirSync(${JSON.stringify(dirname(layout.cliPath))}, { recursive: true })
-  mkdirSync(${JSON.stringify(layout.shimDirectory)}, { recursive: true })
-  writeFileSync(${JSON.stringify(layout.cliPath)}, "process.stdout.write('12.0.2\\\\n')\\n")
-  writeFileSync(${JSON.stringify(layout.shimPath)}, 'npm shim')
-} else {
-  process.stderr.write(\`unexpected fake npm arguments: \${JSON.stringify(args)}\`)
-  process.exitCode = 2
-}
-`,
-    )
-
-    try {
-      const result = bootstrapNpm({ artifact: fixture.artifact, env: { ...process.env, GITHUB_PATH: githubPath, npm_execpath: staleCli } })
-      expect(result).toMatchObject({ current: '11.12.1', installed: '12.0.2', ...layout, githubPathUpdated: true })
-      expect(readFileSync(githubPath, 'utf8')).toBe(`${layout.shimDirectory}\n`)
-    } finally {
-      rmSync(directory, { recursive: true, force: true })
-      rmSync(fixture.temporaryDirectory, { recursive: true, force: true })
-    }
-  })
-
-  test('installs the checked-in npm archive into a fresh prefix without network access', () => {
-    const directory = mkdtempSync(join(tmpdir(), 'catfishpi real npm bootstrap & '))
-    const prefix = join(directory, 'fresh global prefix')
-    const githubPath = join(directory, 'github-path')
-    const cache = join(directory, 'npm cache')
-    writeFileSync(githubPath, '')
-    try {
-      const result = bootstrapNpm({
-        env: {
-          ...process.env,
-          GITHUB_PATH: githubPath,
-          npm_config_cache: cache,
-          npm_config_prefix: prefix,
-        },
-      })
-      expect(result).toMatchObject({ installed: '12.0.2', prefix, githubPathUpdated: true })
-      expect(readFileSync(githubPath, 'utf8')).toBe(`${result.shimDirectory}\n`)
-      expect(readNpmOutput(['--version'], { npmCliPath: result.cliPath })).toBe('12.0.2')
-    } finally {
-      rmSync(directory, { recursive: true, force: true })
-    }
-  }, 30_000)
-
-  test('persists only a validated npm shim directory for the next GitHub Actions step', () => {
-    const directory = mkdtempSync(join(tmpdir(), 'catfishpi-github-path-'))
-    const githubPath = join(directory, 'github-path')
-    writeFileSync(githubPath, '/existing/tool\n')
-    try {
-      expect(persistNpmShimDirectory('/opt/repository-npm/bin', githubPath, 'linux')).toBe(true)
-      const entries = readFileSync(githubPath, 'utf8').trimEnd().split('\n')
-      expect(entries).toEqual(['/existing/tool', '/opt/repository-npm/bin'])
-      // GitHub prepends GITHUB_PATH entries to PATH for subsequent steps, so
-      // the persisted entry becomes the npm selected by the next npm command.
-      expect(entries.at(-1)).toBe('/opt/repository-npm/bin')
-      expect(() => persistNpmShimDirectory('/opt/npm\n/injected', githubPath, 'linux')).toThrow(/absolute single-line path/)
-      expect(() => persistNpmShimDirectory('/opt/npm/bin', 'relative/github-path', 'linux')).toThrow(/absolute single-line path/)
-    } finally {
-      rmSync(directory, { recursive: true, force: true })
-    }
-  })
-
-  test('persists the bootstrapped npm CLI for direct Node release entry points', () => {
-    const directory = mkdtempSync(join(tmpdir(), 'catfishpi-github-env-'))
-    const githubEnv = join(directory, 'github-env')
-    writeFileSync(githubEnv, '')
-    try {
-      expect(persistNpmCliPath('/opt/repository-npm/lib/node_modules/npm/bin/npm-cli.js', githubEnv, 'linux')).toBe(true)
-      expect(readFileSync(githubEnv, 'utf8')).toBe('npm_execpath=/opt/repository-npm/lib/node_modules/npm/bin/npm-cli.js\n')
-      expect(() => persistNpmCliPath('/opt/npm\n/injected', githubEnv, 'linux')).toThrow(/absolute single-line path/)
-      expect(() => persistNpmCliPath('/opt/npm/bin/npm-cli.js', 'relative/github-env', 'linux')).toThrow(/absolute single-line path/)
+      expect(readPnpmOutput(['--version'], { env })).toBe('12.11.1')
+      expect(readPnpmOutput(['--version'], { env, pnpmCliPath: installedCli })).toBe('12.11.2')
     } finally {
       rmSync(directory, { recursive: true, force: true })
     }
@@ -542,15 +257,15 @@ else if (JSON.stringify(args) === ${JSON.stringify(JSON.stringify(expectedInstal
   test('keeps contributor instructions aligned with the enforced engines', () => {
     const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
     const toolchain = readRepositoryToolchain()
-    expect(packageJson.engines).toEqual({ node: `>=${toolchain.node}`, npm: `>=${toolchain.npm}` })
-    expect(packageJson.packageManager).toBe(`npm@${toolchain.npm}`)
+    expect(packageJson.engines).toEqual({ node: `>=${toolchain.node}`, pnpm: `>=${toolchain.pnpm}` })
+    expect(packageJson.packageManager).toBe(`pnpm@${toolchain.pnpm}`)
     expect(readFileSync('.nvmrc', 'utf8').trim()).toBe(toolchain.node)
     const readme = readFileSync('README.md', 'utf8')
-    expect(readme).toContain(`Node.js ${toolchain.node} or newer and npm ${toolchain.npm} or newer`)
-    expect(readme).toContain('npm run toolchain:bootstrap')
-    expect(readme).toContain("invoked npm's configured global prefix")
-    expect(readme).toContain('install-time lifecycle scripts disabled')
-    expect(readme).not.toContain('into the active Node installation')
+    expect(readme).toContain(`Node.js ${toolchain.node} or newer and pnpm ${toolchain.pnpm} or newer`)
+    expect(readme).toContain('corepack enable')
+    expect(readme).toContain('corepack install')
+    expect(readme).toContain('`packageManager`-pinned pnpm')
+    expect(readme).toContain('pnpm install')
     expect(readFileSync('scripts/release/package.mjs', 'utf8')).toContain('assertSupportedToolchain()')
     expect(readFileSync('scripts/release/preflight.mjs', 'utf8')).toContain('assertSupportedToolchain()')
   })
@@ -710,7 +425,7 @@ else if (JSON.stringify(args) === ${JSON.stringify(JSON.stringify(expectedInstal
     expect(ciAudit.name).toBe('Production dependency audit')
     expect(ciAudit.if).toBeUndefined()
     expect(ciAudit.steps?.find((step) => step.uses?.startsWith('actions/checkout@'))?.with?.ref).toBe('${{ github.event.pull_request.head.sha || github.sha }}')
-    const ciAuditSteps = ciAudit.steps?.filter((step) => step.run === 'npm run audit:production') ?? []
+    const ciAuditSteps = ciAudit.steps?.filter((step) => step.run === 'pnpm run audit:production') ?? []
     expect(ciAuditSteps).toHaveLength(1)
     expect(ciAuditSteps[0].name).toBe('Apply named production dependency audit exceptions')
 
@@ -718,7 +433,7 @@ else if (JSON.stringify(args) === ${JSON.stringify(JSON.stringify(expectedInstal
     expect(releaseAudit.name).toBe(ciAudit.name)
     expect(releaseAudit.needs).toBe('validate')
     expect(releaseAudit.steps?.find((step) => step.uses?.startsWith('actions/checkout@'))?.with?.ref).toBe('${{ needs.validate.outputs.sha }}')
-    const releaseAuditSteps = releaseAudit.steps?.filter((step) => step.run === 'npm run audit:production') ?? []
+    const releaseAuditSteps = releaseAudit.steps?.filter((step) => step.run === 'pnpm run audit:production') ?? []
     expect(releaseAuditSteps).toHaveLength(1)
     expect(releaseAuditSteps[0].name).toBe(ciAuditSteps[0].name)
 
@@ -738,7 +453,7 @@ else if (JSON.stringify(args) === ${JSON.stringify(JSON.stringify(expectedInstal
 
     expect(audit.on.schedule).toEqual([{ cron: '17 6 * * 1' }])
     expect(audit.on).toHaveProperty('workflow_dispatch')
-    expect(audit.jobs.audit.steps?.filter((step) => step.run === 'npm run audit:production')).toHaveLength(1)
+    expect(audit.jobs.audit.steps?.filter((step) => step.run === 'pnpm run audit:production')).toHaveLength(1)
   })
 
   test('reads the Node version from .nvmrc and hard-fails empty artifact uploads', () => {
@@ -758,23 +473,29 @@ else if (JSON.stringify(args) === ${JSON.stringify(JSON.stringify(expectedInstal
       expect(setupSteps.length).toBeGreaterThan(0)
       for (const setup of setupSteps) {
         const setupIndex = steps.indexOf(setup)
-        const bootstrapIndexes = steps.flatMap((step, index) => (step.job === setup.job && step.lines.some((line) => line.includes('run: npm run toolchain:bootstrap')) ? [index] : []))
-        const preflightIndexes = steps.flatMap((step, index) => (step.job === setup.job && step.lines.some((line) => line.includes('run: npm run release:preflight:toolchain')) ? [index] : []))
-        expect(bootstrapIndexes, `${path} ${setup.job} bootstrap steps`).toHaveLength(1)
+        // Corepack activates the pinned pnpm before setup-node caches it, then
+        // installs the exact packageManager version before any pnpm command runs.
+        const enableIndexes = steps.flatMap((step, index) => (step.job === setup.job && step.lines.some((line) => line.includes('run: corepack enable')) ? [index] : []))
+        const corepackInstallIndexes = steps.flatMap((step, index) => (step.job === setup.job && step.lines.some((line) => line.includes('run: corepack install')) ? [index] : []))
+        const preflightIndexes = steps.flatMap((step, index) => (step.job === setup.job && step.lines.some((line) => line.includes('run: pnpm run release:preflight:toolchain')) ? [index] : []))
+        expect(enableIndexes, `${path} ${setup.job} corepack enable steps`).toHaveLength(1)
+        expect(corepackInstallIndexes, `${path} ${setup.job} corepack install steps`).toHaveLength(1)
         expect(preflightIndexes, `${path} ${setup.job} toolchain preflight steps`).toHaveLength(1)
-        const bootstrapIndex = bootstrapIndexes[0]
+        const enableIndex = enableIndexes[0]
+        const corepackInstallIndex = corepackInstallIndexes[0]
         const preflightIndex = preflightIndexes[0]
-        const installIndex = steps.findIndex((step, index) => index > setupIndex && step.job === setup.job && step.lines.some((line) => /run: npm ci(?:\s|$)/.test(line)))
-        expect(bootstrapIndex).toBeGreaterThan(setupIndex)
-        expect(preflightIndex).toBeGreaterThan(bootstrapIndex)
+        const installIndex = steps.findIndex((step, index) => index > setupIndex && step.job === setup.job && step.lines.some((line) => /run: pnpm install --frozen-lockfile/.test(line)))
+        expect(enableIndex).toBeLessThan(setupIndex)
+        expect(corepackInstallIndex).toBeGreaterThan(setupIndex)
+        expect(preflightIndex).toBeGreaterThan(corepackInstallIndex)
         if (installIndex >= 0) {
-          expect(bootstrapIndex).toBeLessThan(installIndex)
+          expect(corepackInstallIndex).toBeLessThan(installIndex)
           expect(preflightIndex).toBeGreaterThan(installIndex)
           const firstRunAfterInstall = steps.findIndex((step, index) => index > installIndex && step.job === setup.job && step.lines.some((line) => /^\s*(?:-\s*)?run:/.test(line)))
-          expect(firstRunAfterInstall, `${path} ${setup.job} first command after npm ci`).toBe(preflightIndex)
+          expect(firstRunAfterInstall, `${path} ${setup.job} first command after pnpm install`).toBe(preflightIndex)
         }
       }
-      expect(workflow).not.toContain('npm run release:preflight -- --toolchain-only')
+      expect(workflow).not.toContain('pnpm run release:preflight -- --toolchain-only')
     }
     for (const workflow of [releaseWorkflow, ciWorkflow]) {
       const uploads = workflow.match(/uses: actions\/upload-artifact@/g) ?? []
@@ -804,8 +525,8 @@ else if (JSON.stringify(args) === ${JSON.stringify(JSON.stringify(expectedInstal
     expect(workflow).toContain('node scripts/release/prepare-github-release.mjs')
     // The privileged publishing job installs only the runtime dependency tree
     // the release script needs, never the full dev toolchain.
-    expect(workflow).toMatch(/release-packages:[\s\S]*?npm ci --omit=dev --ignore-scripts[\s\S]*?node scripts\/release\/prepare-github-release\.mjs/)
-    expect(workflow).not.toContain('npm ci --ignore-scripts\n')
+    expect(workflow).toMatch(/release-packages:[\s\S]*?pnpm install --frozen-lockfile --prod --ignore-scripts[\s\S]*?node scripts\/release\/prepare-github-release\.mjs/)
+    expect(workflow).not.toContain('pnpm install --frozen-lockfile --ignore-scripts\n')
     expect(workflow).toContain('actions/download-artifact@')
     expect(workflow).toContain('actions/attest-build-provenance@')
     expect(workflow).toContain('gh release create "$RELEASE_TAG" release-assets/*')
@@ -869,7 +590,7 @@ else if (JSON.stringify(args) === ${JSON.stringify(JSON.stringify(expectedInstal
     expect(releaseWorkflow).toContain('runs-on: ${{ matrix.runner }}')
     // The explicit target arch drives packaging, and each leg uploads only its
     // own arch directory under a per-arch artifact name and cache key.
-    expect(releaseWorkflow).toContain('npm run package:mac -- --skip-verify --arch ${{ matrix.arch }}')
+    expect(releaseWorkflow).toContain('pnpm run package:mac -- --skip-verify --arch ${{ matrix.arch }}')
     expect(releaseWorkflow).toContain('name: catfishpi-public-macos-${{ matrix.arch }}')
     expect(releaseWorkflow).toContain('release/mac/${{ matrix.arch }}/*.dmg')
     expect(releaseWorkflow).toContain('release/mac/${{ matrix.arch }}/*.zip')
@@ -884,7 +605,7 @@ else if (JSON.stringify(args) === ${JSON.stringify(JSON.stringify(expectedInstal
     expect(releaseWorkflow).toMatch(/- arch: arm64\n {12}runner: ubuntu-24\.04-arm/)
     expect(releaseWorkflow).toMatch(/- arch: x64\n {12}runner: ubuntu-22\.04/)
     expect(releaseWorkflow).toContain('runs-on: ${{ matrix.runner }}')
-    expect(releaseWorkflow).toContain('npm run package:linux -- --skip-verify --arch ${{ matrix.arch }}')
+    expect(releaseWorkflow).toContain('pnpm run package:linux -- --skip-verify --arch ${{ matrix.arch }}')
     expect(releaseWorkflow).toContain('name: catfishpi-public-linux-${{ matrix.arch }}')
     expect(releaseWorkflow).toContain('release/linux/${{ matrix.arch }}/*.AppImage')
     expect(releaseWorkflow).toContain('release/linux/${{ matrix.arch }}/latest*.yml')
@@ -1047,13 +768,11 @@ describe('GitHub Release publication', () => {
     }
   })
 
-  test('requires the tag and both package manifests to agree exactly', () => {
-    expect(assertReleaseTag('v0.2.0', '0.2.0', '0.2.0')).toEqual({ tag: 'v0.2.0', version: '0.2.0' })
-    expect(() => assertReleaseTag('0.2.0', '0.2.0', '0.2.0')).toThrow(/must exactly match/)
-    expect(() => assertReleaseTag('v0.2.1', '0.2.0', '0.2.0')).toThrow(/v0\.2\.0/)
-    expect(() => assertReleaseTag('v0.2.0', '0.2.0', '0.1.9')).toThrow(/does not match/)
-    expect(() => assertReleaseTag('v0.2.0', '0.2.0', '0.2.0', '0.1.9')).toThrow(/root package version/)
-    expect(() => assertReleaseTag('v01.2.3', '01.2.3', '01.2.3')).toThrow(/not a supported semantic version/)
+  test('requires the tag to exactly match the package.json version', () => {
+    expect(assertReleaseTag('v0.2.0', '0.2.0')).toEqual({ tag: 'v0.2.0', version: '0.2.0' })
+    expect(() => assertReleaseTag('0.2.0', '0.2.0')).toThrow(/must exactly match/)
+    expect(() => assertReleaseTag('v0.2.1', '0.2.0')).toThrow(/v0\.2\.0/)
+    expect(() => assertReleaseTag('v01.2.3', '01.2.3')).toThrow(/not a supported semantic version/)
   })
 
   test('selects the exact cross-platform asset set and writes reproducible checksums', async () => {
@@ -1064,7 +783,6 @@ describe('GitHub Release publication', () => {
     mkdirSync(projectDirectory, { recursive: true })
     mkdirSync(inputDirectory, { recursive: true })
     writeFileSync(join(projectDirectory, 'package.json'), JSON.stringify({ version: '0.2.0' }))
-    writeFileSync(join(projectDirectory, 'package-lock.json'), JSON.stringify({ version: '0.2.0', packages: { '': { version: '0.2.0' } } }))
     const expected = expectedGitHubReleaseAssets('0.2.0')
     const downloaded = expectedDownloadedReleaseAssets('0.2.0')
     for (const [index, name] of downloaded.entries()) {
@@ -1121,7 +839,6 @@ describe('GitHub Release publication', () => {
     mkdirSync(projectDirectory, { recursive: true })
     mkdirSync(inputDirectory, { recursive: true })
     writeFileSync(join(projectDirectory, 'package.json'), JSON.stringify({ version: '0.2.0' }))
-    writeFileSync(join(projectDirectory, 'package-lock.json'), JSON.stringify({ version: '0.2.0', packages: { '': { version: '0.2.0' } } }))
 
     try {
       await expect(prepareGitHubRelease({ inputDirectory, outputDirectory: join(directory, 'missing-output'), projectDirectory, tag: 'v0.2.0' })).rejects.toThrow(/incomplete/)
@@ -1198,6 +915,7 @@ describe('post-package verification helpers', () => {
       '/out/preload/index.js',
       '/out/renderer/index.html',
       '/node_modules/node-pty/lib/index.js',
+      '/node_modules/@earendil-works/pi-ai/dist/index.js',
       '/node_modules/zeromq/lib/index.js',
       '/node_modules/zeromq/build/manifest.json',
     ]
@@ -1210,7 +928,7 @@ describe('post-package verification helpers', () => {
   test('keeps every platform native unpack allowlist exact and architecture-specific', () => {
     const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
     expect(packageJson.author).toEqual({ name: 'Catfish-Pi contributors' })
-    expect(packageJson.description).toBe('A desktop workspace for Pi, OMP, and Prime Agent (forked from GooeyPi)')
+    expect(packageJson.description).toBe('A desktop workspace for Pi and OMP (forked from GooeyPi)')
     expect(packageJson.homepage).toBe('https://github.com/salmoshu/Catfish-Pi')
     expect(packageJson.build.productName).toBe('Catfish-Pi')
     expect(packageJson.build.appId).toBe('app.catfishpi.desktop')
@@ -1237,12 +955,8 @@ describe('post-package verification helpers', () => {
     expect(macIconChunks.has('ic04')).toBe(true)
     expect(macIconChunks.has('ic11')).toBe(true)
     expect(packageJson.build.asarUnpack).toBeUndefined()
-    expect(packageJson.build.mac.asarUnpack).toEqual([
-      '**/node_modules/node-pty/build/Release/pty.node',
-      '**/node_modules/node-pty/build/Release/spawn-helper',
-      '**/node_modules/zeromq/build/darwin/${arch}/node/*-Release/addon.node',
-    ])
-    expect(packageJson.build.linux.asarUnpack).toEqual(['**/node_modules/node-pty/build/Release/pty.node', '**/node_modules/zeromq/build/linux/${arch}/node/*-Release/addon.node'])
+    expect(packageJson.build.mac.asarUnpack).toEqual(['**/node_modules/node-pty/build/Release/pty.node', '**/node_modules/node-pty/build/Release/spawn-helper'])
+    expect(packageJson.build.linux.asarUnpack).toEqual(['**/node_modules/node-pty/build/Release/pty.node'])
     expect(packageJson.build.win.asarUnpack).toEqual([
       '**/node_modules/node-pty/prebuilds/win32-${arch}/pty.node',
       '**/node_modules/node-pty/prebuilds/win32-${arch}/conpty.node',
@@ -1251,7 +965,6 @@ describe('post-package verification helpers', () => {
       '**/node_modules/node-pty/prebuilds/win32-${arch}/winpty.dll',
       '**/node_modules/node-pty/prebuilds/win32-${arch}/conpty/OpenConsole.exe',
       '**/node_modules/node-pty/prebuilds/win32-${arch}/conpty/conpty.dll',
-      '**/node_modules/zeromq/build/win32/${arch}/node/*-Release/addon.node',
     ])
     expect(packageJson.build.linux.target).toEqual(['AppImage', 'deb', 'rpm', 'pacman'])
     expect(packageJson.build.win.target).toEqual(['nsis', 'zip', 'appx'])
@@ -1323,48 +1036,11 @@ describe('post-package verification helpers', () => {
     expect(script).toContain('$certificate.Thumbprint.ToUpperInvariant() -ne $env:CATFISHPI_WINDOWS_CERT_THUMBPRINT')
   })
 
-  test('excludes other platform native build trees and declares zeromq directly', () => {
+  test('excludes other platform native build trees', () => {
     const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
-    const optimizedAgentExclusions = [
-      '!**/node_modules/prime-agent/docs/**',
-      '!**/node_modules/prime-agent/dist/bundle/**',
-      '!**/node_modules/prime-agent/dist/modes/**',
-      '!**/node_modules/prime-agent/**/*.map',
-      '!**/node_modules/prime-agent/**/*.d.ts',
-      '!**/node_modules/@earendil-works/pi-tui/**',
-      '!**/node_modules/koffi/**',
-    ]
-    expect(packageJson.build.mac.files).toEqual([
-      'out/**/*',
-      'package.json',
-      ...optimizedAgentExclusions,
-      '!**/node_modules/zeromq/build/linux/**',
-      '!**/node_modules/zeromq/build/win32/**',
-      '!**/node_modules/extract-zip/index.linux-*.node',
-      '!**/node_modules/extract-zip/index.win32-*.node',
-    ])
-    expect(packageJson.build.linux.files).toEqual([
-      'out/**/*',
-      'package.json',
-      ...optimizedAgentExclusions,
-      '!**/node_modules/zeromq/build/darwin/**',
-      '!**/node_modules/zeromq/build/win32/**',
-      '!**/node_modules/extract-zip/index.darwin-*.node',
-      '!**/node_modules/extract-zip/index.win32-*.node',
-    ])
-    expect(packageJson.build.win.files).toEqual([
-      'out/**/*',
-      'package.json',
-      ...optimizedAgentExclusions,
-      '!**/node_modules/zeromq/build/darwin/**',
-      '!**/node_modules/zeromq/build/linux/**',
-      '!**/node_modules/extract-zip/index.darwin-*.node',
-      '!**/node_modules/extract-zip/index.linux-*.node',
-    ])
-    // Pin the app to the zeromq range prime-agent uses so the packaged addon
-    // and the agent's runtime expectations cannot drift apart silently.
-    const primeAgent = JSON.parse(readFileSync(new URL('../node_modules/prime-agent/package.json', import.meta.url), 'utf8'))
-    expect(packageJson.dependencies.zeromq).toBe(primeAgent.dependencies.zeromq)
+    expect(packageJson.build.mac.files).toEqual(['out/**/*', 'package.json', '!**/node_modules/extract-zip/index.linux-*.node', '!**/node_modules/extract-zip/index.win32-*.node'])
+    expect(packageJson.build.linux.files).toEqual(['out/**/*', 'package.json', '!**/node_modules/extract-zip/index.darwin-*.node', '!**/node_modules/extract-zip/index.win32-*.node'])
+    expect(packageJson.build.win.files).toEqual(['out/**/*', 'package.json', '!**/node_modules/extract-zip/index.darwin-*.node', '!**/node_modules/extract-zip/index.linux-*.node'])
   })
 
   test('accepts bounded ZeroMQ ABI fallbacks per architecture', () => {
@@ -1485,7 +1161,7 @@ describe('cross-platform packaging repair', () => {
 
   test('every asarUnpack glob matches at least one real file for platforms present in node_modules', () => {
     const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
-    const root = new URL('..', import.meta.url).pathname
+    const root = fileURLToPath(new URL('..', import.meta.url))
     const localArchitecture = process.arch === 'arm64' ? 'arm64' : 'x64'
     const localTarget = process.platform === 'darwin' ? 'mac' : process.platform
     const architecturesFor = (glob: string) => (glob.includes('node-pty/build/Release') ? [localArchitecture] : ['arm64', 'x64'])
@@ -1515,8 +1191,6 @@ describe('cross-platform packaging repair', () => {
       for (const file of expectedNativeFiles(target, architecture)) {
         expect(globs, `verifier requires ${file} but no ${target} asarUnpack glob produces it`).toContain(file)
       }
-      const zeroMqGlob = globs.find((glob) => glob.includes('zeromq'))
-      expect(zeroMqGlob).toBe(`node_modules/zeromq/build/${nativeRuntimeDirectory(target)}/${architecture}/node/*-Release/addon.node`)
       const sampleAddon = `node_modules/zeromq/build/${nativeRuntimeDirectory(target)}/${architecture}/node/glibc-x64-115-Release/addon.node`
       expect(zeroMqAddonPattern(target, architecture).test(sampleAddon)).toBe(true)
     }
@@ -1560,10 +1234,27 @@ describe('cross-platform packaging repair', () => {
     const packageScript = readFileSync('scripts/release/package.mjs', 'utf8')
     expect(packageScript).toContain("run('electron-builder', builderArgs, builderEnv)")
     expect(packageScript).not.toContain("['exec', '--', 'electron-builder'")
-    const npmViaLifecycle = resolveCommandInvocation('npm', ['run', 'release:verify'], 'win32', { npm_execpath: 'C:/npm/npm-cli.js' })
-    expect(npmViaLifecycle).toEqual({ file: process.execPath, args: ['C:/npm/npm-cli.js', 'run', 'release:verify'], shell: false })
-    expect(() => resolveCommandInvocation('npm', ['ci'], 'win32', { npm_execpath: 'C:/npm/npm.cmd' })).toThrow(/JavaScript npm CLI/)
-    expect(resolveCommandInvocation('npm', ['ci'], 'darwin', {})).toEqual({ file: 'npm', args: ['ci'], shell: false })
+    const pnpmViaLifecycle = resolveCommandInvocation('pnpm', ['run', 'release:verify'], 'win32', { pnpm_execpath: 'C:/pnpm/pnpm.cjs' })
+    expect(pnpmViaLifecycle).toEqual({ file: process.execPath, args: ['C:/pnpm/pnpm.cjs', 'run', 'release:verify'], shell: false })
+    // pnpm also runs under npm_execpath when invoked from an npm-style lifecycle.
+    expect(resolveCommandInvocation('pnpm', ['--version'], 'linux', { npm_execpath: '/opt/pnpm/pnpm.mjs', COREPACK_HOME: '/nonexistent-corepack' })).toEqual({
+      file: process.execPath,
+      args: ['/opt/pnpm/pnpm.mjs', '--version'],
+      shell: false,
+    })
+    const corepackHome = mkdtempSync(join(tmpdir(), 'catfishpi-corepack-'))
+    const corepackCli = join(corepackHome, 'v1', 'pnpm', readRepositoryToolchain().pnpm, 'bin', 'pnpm.mjs')
+    mkdirSync(dirname(corepackCli), { recursive: true })
+    writeFileSync(corepackCli, "process.stdout.write('12.11.2\\n')\n")
+    expect(resolveCommandInvocation('pnpm', ['--version'], 'linux', { npm_execpath: '/opt/pnpm/pnpm-native', COREPACK_HOME: corepackHome })).toEqual({
+      file: process.execPath,
+      args: [corepackCli, '--version'],
+      shell: false,
+    })
+    // Point COREPACK_HOME at an empty directory so the Corepack fallback cannot mask the rejected lifecycle CLI.
+    expect(() => resolveCommandInvocation('pnpm', ['install'], 'win32', { pnpm_execpath: 'C:/pnpm/pnpm.cmd', COREPACK_HOME: join(corepackHome, 'empty') })).toThrow(/absolute JavaScript entrypoint/)
+    expect(() => resolveCommandInvocation('pnpm', ['install'], 'win32', { pnpm_execpath: 'relative/pnpm.cjs' })).toThrow(/absolute single-line path/)
+    expect(resolveCommandInvocation('pnpm', ['install'], 'darwin', { COREPACK_HOME: '/nonexistent-corepack' })).toEqual({ file: 'pnpm', args: ['install'], shell: false })
   })
 
   test('installs Electron before rebuilding native app dependencies', () => {
@@ -1654,12 +1345,15 @@ describe('release size budgets', () => {
 })
 
 describe('vendored supply-chain pins', () => {
-  test('every non-registry dependency in the lockfile matches its recorded pin exactly', () => {
-    const lockfile = JSON.parse(readFileSync('package-lock.json', 'utf8'))
-    const pins = JSON.parse(readFileSync('scripts/release/dependency-pins.json', 'utf8')).packages
-    const nonRegistry = (Object.entries(lockfile.packages ?? {}) as Array<[string, { resolved?: string; integrity?: string }]>).filter(
-      ([, entry]) => typeof entry.resolved === 'string' && entry.resolved.length > 0 && !entry.resolved.startsWith('https://registry.npmjs.org'),
-    )
+  test('every vendored package snapshot in the pnpm lockfile matches its recorded pin exactly', () => {
+    // pnpm 12 writes a multi-document lockfile when config dependencies pin the
+    // package manager itself; merge every document's package snapshots.
+    const documents = yaml.loadAll(readFileSync('pnpm-lock.yaml', 'utf8')) as Array<{
+      packages?: Record<string, { resolution?: { tarball?: string; integrity?: string } }>
+    }>
+    const lockfilePackages: Record<string, { resolution?: { tarball?: string; integrity?: string } }> = Object.assign({}, ...documents.map((document) => document.packages ?? {}))
+    const pins = JSON.parse(readFileSync('scripts/release/dependency-pins.json', 'utf8')).packages as Record<string, { resolved: string; integrity: string }>
+    const vendored = Object.entries(lockfilePackages).filter(([, entry]) => typeof entry.resolution?.tarball === 'string' && entry.resolution.tarball.startsWith('file:vendor/'))
 
     // The lockfile sha512 hashes are the supply-chain integrity boundary for
     // the vendored Prime Agent tarballs. A regenerated lockfile silently
@@ -1667,17 +1361,17 @@ describe('vendored supply-chain pins', () => {
     // a deliberate, reviewed change. To upgrade Prime Agent on purpose:
     // verify the new tarballs, replace them in vendor/, update the lockfile,
     // then mirror the new resolved/integrity values here in the same commit.
-    expect(nonRegistry.length).toBeGreaterThan(0)
-    for (const [name, entry] of nonRegistry) {
+    expect(vendored.length).toBeGreaterThan(0)
+    for (const [name, entry] of vendored) {
       const pin = pins[name]
-      expect(pin, `unpinned non-registry dependency: ${name}`).toBeDefined()
-      expect(entry.resolved, `resolved location drifted for ${name}`).toBe(pin.resolved)
-      expect(entry.integrity, `integrity drifted for ${name}`).toBe(pin.integrity)
-      expect(entry.integrity, `weak integrity algorithm for ${name}`).toMatch(/^sha512-/)
+      expect(pin, `unpinned vendored dependency: ${name}`).toBeDefined()
+      expect(entry.resolution?.tarball, `resolved location drifted for ${name}`).toBe(pin.resolved)
+      expect(entry.resolution?.integrity, `integrity drifted for ${name}`).toBe(pin.integrity)
+      expect(entry.resolution?.integrity, `weak integrity algorithm for ${name}`).toMatch(/^sha512-/)
     }
     for (const name of Object.keys(pins)) {
       expect(
-        nonRegistry.some(([lockName]) => lockName === name),
+        vendored.some(([lockName]) => lockName === name),
         `stale pin for removed dependency: ${name}`,
       ).toBe(true)
     }
@@ -1713,7 +1407,6 @@ describe('vendored supply-chain pins', () => {
     for (const pin of Object.values(manifest.packages as Record<string, { resolved: string }>)) {
       if (pin.resolved.startsWith('file:vendor/')) pinned.add(pin.resolved.slice('file:'.length))
     }
-    pinned.add(readPinnedNpmArtifact().relativePath)
     for (const entry of Object.values(reference ?? {})) pinned.add(entry.path)
 
     for (const [name, entry] of Object.entries(reference ?? {})) {
@@ -1727,63 +1420,29 @@ describe('vendored supply-chain pins', () => {
     expect(unpinned, 'vendored tarballs without any pin').toEqual([])
   })
 
-  test('the checked-in npm bootstrap archive matches its strict artifact pin and provenance record', () => {
-    const pinManifest = JSON.parse(readFileSync('scripts/release/dependency-pins.json', 'utf8'))
-    const artifact = readPinnedNpmArtifact()
-    expect(pinManifest.artifacts).toEqual({
-      npm: {
-        version: '12.0.2',
-        path: 'vendor/npm-12.0.2.tgz',
-        source: 'https://registry.npmjs.org/npm/-/npm-12.0.2.tgz',
-        integrity: PINNED_NPM_INTEGRITY,
-        size: artifact.size,
-        license: 'Artistic-2.0',
-      },
-    })
-    expect(verifyPinnedNpmArtifact(artifact)).toEqual(artifact)
-    expect(readdirSync('vendor').filter((name) => /^npm-\d+\.\d+\.\d+\.tgz$/.test(name))).toEqual(['npm-12.0.2.tgz'])
-
-    const provenance = readFileSync('vendor/npm-12.0.2.md', 'utf8')
-    expect(provenance).toContain('https://registry.npmjs.org/npm/-/npm-12.0.2.tgz')
-    expect(provenance).toContain(PINNED_NPM_INTEGRITY)
-    expect(provenance).toContain('Artistic-2.0')
-    expect(provenance).toContain('unmodified')
-    expect(provenance).toMatch(/before\s+invoking npm's installer/)
-
-    const security = readFileSync('docs/security.md', 'utf8')
-    expect(security).toContain("Before invoking npm's installer")
-    expect(security).not.toContain('Before invoking npm,')
-    expect(security).not.toContain('lifecycle scripts, extensions')
-  })
-
-  test('keeps the bootstrap archive out of the packaged desktop application', () => {
+  test('keeps vendored tarballs out of the packaged desktop application', () => {
     const build = JSON.parse(readFileSync('package.json', 'utf8')).build
     const packagedInputs = JSON.stringify({ files: build.files, extraResources: build.extraResources, mac: build.mac?.files, linux: build.linux?.files, win: build.win?.files })
     expect(packagedInputs).not.toContain('vendor/npm-')
     expect(packagedInputs).not.toContain('vendor/**')
-    expect(build.files).toEqual([
-      'out/**/*',
-      'package.json',
-      '!**/node_modules/prime-agent/docs/**',
-      '!**/node_modules/prime-agent/dist/bundle/**',
-      '!**/node_modules/prime-agent/dist/modes/**',
-      '!**/node_modules/prime-agent/**/*.map',
-      '!**/node_modules/prime-agent/**/*.d.ts',
-      '!**/node_modules/@earendil-works/pi-tui/**',
-      '!**/node_modules/koffi/**',
-    ])
+    expect(build.files).toEqual(['out/**/*', 'package.json'])
   })
 })
 
 const AUDIT_EXCEPTION_REASON = 'no patched release exists upstream yet'
+// pnpm audit --json keys advisories by registry ID; the GitHub advisory ID and
+// affected package name live on the advisory object itself.
 const auditReport = (advisories: Array<{ package: string; advisory: string; severity: string }>) => ({
-  vulnerabilities: Object.fromEntries(
-    advisories.map((entry) => [
-      entry.package,
+  advisories: Object.fromEntries(
+    advisories.map((entry, index) => [
+      String(1000 + index),
       {
-        name: entry.package,
+        id: 1000 + index,
+        github_advisory_id: entry.advisory,
+        module_name: entry.package,
         severity: entry.severity,
-        via: [{ source: 1, name: entry.package, title: `${entry.package} flaw`, url: `https://github.com/advisories/${entry.advisory}`, severity: entry.severity }],
+        title: `${entry.package} flaw`,
+        url: `https://github.com/advisories/${entry.advisory}`,
       },
     ]),
   ),
@@ -1794,42 +1453,34 @@ describe('production dependency audit', () => {
   const exception = parseAuditExceptions(JSON.stringify({ exceptions: [{ ...advisory, expires: '2099-01-01', reason: AUDIT_EXCEPTION_REASON }] }))
   const now = Date.parse('2026-08-14T00:00:00Z')
 
-  test('reports only high and critical advisories, ignoring back-references to other packages', () => {
-    const report = {
-      vulnerabilities: {
-        ...auditReport([advisory, { package: 'left-pad', advisory: 'GHSA-2222-2222-2222', severity: 'moderate' }]).vulnerabilities,
-        'prime-agent': { name: 'prime-agent', severity: 'high', via: ['extract-zip'] },
-      },
-    }
+  test('reports only high and critical advisories from the pnpm audit report', () => {
+    const report = auditReport([advisory, { package: 'left-pad', advisory: 'GHSA-2222-2222-2222', severity: 'moderate' }])
 
     expect(collectAuditAdvisories(report)).toEqual([{ advisory: advisory.advisory, package: 'extract-zip', severity: 'high', title: 'extract-zip flaw' }])
   })
 
-  test('fails closed on malformed vulnerability entries and via arrays', () => {
-    expect(() => collectAuditAdvisories({ vulnerabilities: { broken: null } })).toThrow(/broken/)
-    expect(() => collectAuditAdvisories({ vulnerabilities: { broken: { name: 'broken', via: 'oops' } } })).toThrow(/via/)
+  test('fails closed on a malformed advisories section or entry', () => {
+    expect(() => collectAuditAdvisories(null)).toThrow(/not an object/)
+    expect(() => collectAuditAdvisories({ advisories: 'oops' })).toThrow(/malformed advisories/)
+    expect(() => collectAuditAdvisories({ advisories: [] })).toThrow(/malformed advisories/)
+    expect(() => collectAuditAdvisories({ advisories: { '1073': null } })).toThrow(/1073 is not an object/)
   })
 
-  test('fails closed on malformed via entries', () => {
-    expect(() => collectAuditAdvisories({ vulnerabilities: { broken: { name: 'broken', via: [42, null] } } })).toThrow(/via/)
+  test('fails closed when an advisory severity is missing or unknown', () => {
+    expect(() => collectAuditAdvisories({ advisories: { '1073': { module_name: advisory.package } } })).toThrow(/unknown severity/)
+    expect(() => collectAuditAdvisories({ advisories: { '1073': { module_name: advisory.package, severity: 'urgent' } } })).toThrow(/unknown severity/)
   })
 
-  test('fails closed when a via severity is missing or unknown', () => {
-    const missingSeverity = { url: `https://github.com/advisories/${advisory.advisory}`, title: 'missing severity' }
-    expect(() => collectAuditAdvisories({ vulnerabilities: { [advisory.package]: { name: advisory.package, via: [missingSeverity] } } })).toThrow(/severity/)
-    expect(() => collectAuditAdvisories({ vulnerabilities: { [advisory.package]: { name: advisory.package, via: [{ ...missingSeverity, severity: 'urgent' }] } } })).toThrow(/severity/)
+  test('fails closed when a high or critical advisory has no parseable advisory ID', () => {
+    const entry = { module_name: advisory.package, severity: 'critical', title: 'unresolvable advisory', url: 'not-an-advisory-url' }
+
+    expect(() => collectAuditAdvisories({ advisories: { '1073': entry } })).toThrow(/advisory ID/)
   })
 
-  test('fails closed when a high or critical via has no parseable advisory ID', () => {
-    const via = { name: advisory.package, severity: 'critical', title: 'unresolvable advisory', url: 'not-an-advisory-url' }
+  test('fails closed when a high or critical advisory has no package name', () => {
+    const entry = { severity: 'high', title: 'unnamed advisory', github_advisory_id: advisory.advisory, url: `https://github.com/advisories/${advisory.advisory}` }
 
-    expect(() => collectAuditAdvisories({ vulnerabilities: { [advisory.package]: { name: advisory.package, via: [via] } } })).toThrow(/advisory ID/)
-  })
-
-  test('fails closed when a high or critical via has no package name', () => {
-    const via = { severity: 'high', title: 'unnamed advisory', url: `https://github.com/advisories/${advisory.advisory}` }
-
-    expect(() => collectAuditAdvisories({ vulnerabilities: { unknown: { via: [via] } } })).toThrow(/package name/)
+    expect(() => collectAuditAdvisories({ advisories: { '1073': entry } })).toThrow(/package name/)
   })
 
   test('accepts a listed advisory while still failing on an unlisted one', () => {
@@ -1853,7 +1504,7 @@ describe('production dependency audit', () => {
   })
 
   test('fails on a stale exception so a fixed advisory stops being suppressed', () => {
-    const evaluation = evaluateAuditReport({ vulnerabilities: {} }, exception, now)
+    const evaluation = evaluateAuditReport({ advisories: {} }, exception, now)
     const described = describeAuditEvaluation(evaluation)
 
     expect(evaluation.stale).toHaveLength(1)

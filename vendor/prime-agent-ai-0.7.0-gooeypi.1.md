@@ -9,9 +9,9 @@ This artifact is a GooeyPi-maintained patch of the previously trusted
 
 The reviewable source diff is
 `vendor/patches/prime-agent-ai-0.7.0-gooeypi.1.patch`. Run
-`npm run vendor:verify-patches` to verify the trusted base checksum, apply that
+`pnpm run vendor:verify-patches` to verify the trusted base checksum, apply that
 diff, compare every rebuilt package file with this reviewed archive, and prove
-that the pinned npm toolchain can repack the result reproducibly.
+that the pinned pnpm toolchain can repack the result reproducibly.
 
 The patch makes dynamic MCP OAuth registration honor the authorization
 server's `token_endpoint_auth_methods_supported` metadata. It retains the

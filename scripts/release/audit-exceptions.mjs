@@ -9,44 +9,39 @@ const ADVISORY_PATTERN = /^GHSA-[23456789cfghjmpqrvwx]{4}-[23456789cfghjmpqrvwx]
 const EXPIRY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
 const AUDIT_KNOWN_SEVERITIES = new Set(['info', 'low', 'moderate', 'high', 'critical'])
 
-function advisoryId(via) {
-  const fromUrl = /\/advisories\/(GHSA-[\w-]+)$/.exec(typeof via.url === 'string' ? via.url : '')?.[1]
-  return fromUrl ?? (typeof via.source === 'number' ? `npm-${via.source}` : undefined)
+function advisoryId(advisory) {
+  const fromUrl = /\/advisories\/(GHSA-[\w-]+)$/.exec(typeof advisory.url === 'string' ? advisory.url : '')?.[1]
+  return advisory.github_advisory_id ?? fromUrl ?? (typeof advisory.id === 'number' ? `npm-${advisory.id}` : undefined)
 }
 
 /**
- * Flattens `npm audit --json` into the distinct high and critical advisories it reports.
- * Each vulnerable package lists its own advisories as objects in `via`; string entries are
- * only back-references to another vulnerable package, so they carry no advisory of their own.
+ * Flattens `pnpm audit --json` into the distinct high and critical advisories it reports.
+ * pnpm keys advisories by registry ID; the GitHub advisory ID and affected package name
+ * live on the advisory object itself.
  */
 export function collectAuditAdvisories(report) {
   if (!report || typeof report !== 'object') throw new Error('Audit report is not an object')
-  const vulnerabilities = report.vulnerabilities
-  if (vulnerabilities !== undefined && (typeof vulnerabilities !== 'object' || vulnerabilities === null)) {
-    throw new Error('Audit report has a malformed vulnerabilities section')
+  const advisories = report.advisories
+  if (advisories !== undefined && (typeof advisories !== 'object' || advisories === null || Array.isArray(advisories))) {
+    throw new Error('Audit report has a malformed advisories section')
   }
-  const advisories = new Map()
-  for (const [packageKey, entry] of Object.entries(vulnerabilities ?? {})) {
-    if (typeof entry !== 'object' || entry === null) throw new Error(`Vulnerability entry ${packageKey} is not an object`)
-    if (!Array.isArray(entry.via)) throw new Error(`Vulnerability entry ${packageKey} has no via array`)
-    for (const [viaIndex, via] of entry.via.entries()) {
-      if (typeof via === 'string') continue
-      if (typeof via !== 'object' || via === null) throw new Error(`Vulnerability entry ${packageKey} has a malformed via entry at index ${viaIndex}`)
-      if (!AUDIT_KNOWN_SEVERITIES.has(via.severity)) throw new Error(`Vulnerability entry ${packageKey} has an unknown via severity`)
-      if (!AUDIT_FAILING_SEVERITIES.has(via.severity)) continue
-      const advisory = advisoryId(via)
-      if (!advisory) throw new Error(`High or critical vulnerability entry ${packageKey} has no parseable advisory ID`)
-      const pkg = typeof via.name === 'string' && via.name.length ? via.name : typeof entry.name === 'string' && entry.name.length ? entry.name : undefined
-      if (!pkg) throw new Error(`High or critical advisory ${advisory} in ${packageKey} has no package name`)
-      advisories.set(`${advisory}\u0000${pkg}`, {
-        advisory,
-        package: pkg,
-        severity: via.severity,
-        title: typeof via.title === 'string' ? via.title : 'unknown advisory',
-      })
-    }
+  const collected = new Map()
+  for (const [registryId, advisory] of Object.entries(advisories ?? {})) {
+    if (typeof advisory !== 'object' || advisory === null) throw new Error(`Advisory entry ${registryId} is not an object`)
+    if (!AUDIT_KNOWN_SEVERITIES.has(advisory.severity)) throw new Error(`Advisory entry ${registryId} has an unknown severity`)
+    if (!AUDIT_FAILING_SEVERITIES.has(advisory.severity)) continue
+    const id = advisoryId(advisory)
+    if (!id) throw new Error(`High or critical advisory entry ${registryId} has no parseable advisory ID`)
+    const pkg = typeof advisory.module_name === 'string' && advisory.module_name.length ? advisory.module_name : undefined
+    if (!pkg) throw new Error(`High or critical advisory ${id} in entry ${registryId} has no package name`)
+    collected.set(`${id}\u0000${pkg}`, {
+      advisory: id,
+      package: pkg,
+      severity: advisory.severity,
+      title: typeof advisory.title === 'string' ? advisory.title : 'unknown advisory',
+    })
   }
-  return [...advisories.values()].sort((left, right) => `${left.package}${left.advisory}`.localeCompare(`${right.package}${right.advisory}`))
+  return [...collected.values()].sort((left, right) => `${left.package}${left.advisory}`.localeCompare(`${right.package}${right.advisory}`))
 }
 
 export function parseAuditExceptions(contents) {

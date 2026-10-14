@@ -4,7 +4,7 @@ import type { PrimeWorkApi, RuntimeInfo, SessionRecord, TranscriptMessage } from
 
 const project = {
   id: 'compact-project',
-  harness: 'prime' as const,
+  harness: 'pi' as const,
   name: 'Compact project',
   path: '/compact-project',
   folders: ['/compact-project'],
@@ -17,7 +17,7 @@ const project = {
 
 const session = (status: SessionRecord['status'] = 'idle'): SessionRecord => ({
   id: 'compact-session',
-  harness: 'prime',
+  harness: 'pi',
   filePath: '/compact-project/session.jsonl',
   projectPath: '/compact-project',
   title: 'Compact session',
@@ -29,7 +29,7 @@ const session = (status: SessionRecord['status'] = 'idle'): SessionRecord => ({
 
 const runtime = (runtimeId = 'idle-runtime', isStreaming = false): RuntimeInfo => ({
   runtimeId,
-  harness: 'prime',
+  harness: 'pi',
   cwd: project.primaryFolder,
   sessionFile: session().filePath,
   isStreaming,
@@ -96,7 +96,7 @@ function fixture({ runtime: configuredRuntime = null, sessionStatus = 'idle', ow
     sessions: workspaceSessions,
     activeProject: project,
     workspace,
-    settingsState: { settings: { activeHarness: 'prime' } },
+    settingsState: { settings: { activeHarness: 'pi' } },
     provider: { model: 'auto', effort: 'medium', fast: false },
     submissionAdmissionRef: { current: { active: false, run: async (task: () => Promise<void>) => { await task(); return true } } },
     initialized: true,

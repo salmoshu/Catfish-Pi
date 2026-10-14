@@ -5,7 +5,6 @@ import type {
   BrowserAnnotation,
   CheckoutAction,
   CheckoutCatalog,
-  HarnessId,
   MessageEnterAction,
   PrimeContextUsage,
   PrimeModelDescriptor,
@@ -49,11 +48,10 @@ interface ComposerProps {
   fast: boolean
   fastSupported: boolean
   fastAvailable: boolean
-  /** Active harness agent name for tooltips ("Prime Agent" / "OMP"). */
+  /** Active harness agent name for tooltips ("Pi" / "OMP"). */
   agentName?: string
-  /** Active harness short name for inline copy ("Prime" / "OMP"). */
+  /** Active harness short name for inline copy ("Pi" / "OMP"). */
   shortName?: string
-  harness?: HarnessId
   imageInputSupported: boolean
   /** Primary action for Enter; Ctrl/Cmd+Enter selects the opposite action. */
   messageEnterAction?: MessageEnterAction
@@ -71,7 +69,7 @@ interface ComposerProps {
   terminalSelection?: TerminalSelectionContext
   /** Reads the active xterm buffer only at submit time, avoiding output-driven renderer updates. */
   getTerminalContext?(): TerminalPromptContext | undefined
-  /** Messages accepted by Prime but waiting for a turn boundary. */
+  /** Messages accepted by the harness but waiting for a turn boundary. */
   queuedMessages?: QueuedPrompt[]
   /** Messages held inside the harness when it exposes only a count, not previews. */
   harnessQueuedMessageCount?: number
@@ -104,11 +102,6 @@ const commands = [
   { command: '/status', detail: 'Show runtime status' },
 ]
 
-const primeCommands = [
-  ...commands,
-  { command: '/mcp', detail: 'View MCP integrations and local servers' },
-]
-
 const reasoningLabels: Record<PrimeThinkingLevel, string> = {
   off: 'Off',
   minimal: 'Minimal',
@@ -137,9 +130,8 @@ export const Composer = memo(function Composer({
   fast,
   fastSupported,
   fastAvailable,
-  agentName = 'Prime Agent',
-  shortName = 'Prime',
-  harness = 'prime',
+  agentName = 'Pi',
+  shortName = 'Pi',
   imageInputSupported,
   messageEnterAction = 'queue',
   contextUsage,
@@ -393,7 +385,7 @@ export const Composer = memo(function Composer({
 
   const suggestions =
     menu === 'command'
-      ? (harness === 'prime' ? primeCommands : commands)
+      ? commands
           .filter((item) => item.command.startsWith(value))
           .map((item) => ({
             key: item.command,
@@ -758,7 +750,7 @@ export const Composer = memo(function Composer({
             {dictation.state === 'recording' ? (
               <button type="button" className="send-button" aria-label="Transcribe and send message" onClick={() => void finishDictation(true)}><ArrowUp size={17} /></button>
             ) : busy ? (
-              <button type="button" className="send-button send-button--stop" aria-label="Stop Prime" onClick={() => void onStop()}>
+              <button type="button" className="send-button send-button--stop" aria-label={`Stop ${shortName}`} onClick={() => void onStop()}>
                 <Square size={10} fill="currentColor" aria-hidden="true" />
               </button>
             ) : (

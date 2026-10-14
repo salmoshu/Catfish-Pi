@@ -286,7 +286,7 @@ const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function 
     } else {
       terminal.writeln('\x1b[38;5;141mCatfishPi terminal\x1b[0m')
       terminal.writeln('\x1b[90mA live PTY will connect when the desktop bridge and project are available.\x1b[0m')
-      terminal.write('\r\n\x1b[32m➜\x1b[0m \x1b[36mprime-work\x1b[0m \x1b[90mgit:(main)\x1b[0m ')
+      terminal.write('\r\n\x1b[32m➜\x1b[0m \x1b[36mcatfish-pi\x1b[0m \x1b[90mgit:(main)\x1b[0m ')
     }
 
     const observer = new ResizeObserver(() => {

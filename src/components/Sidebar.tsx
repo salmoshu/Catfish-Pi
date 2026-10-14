@@ -1,5 +1,6 @@
 import {
   Archive,
+  ArrowLeft,
   Bell,
   CalendarClock,
   Check,
@@ -32,7 +33,9 @@ import { sortProjects } from '@/lib/project-order'
 import { useI18n, type MessageKey } from '@/lib/i18n'
 import { shortcutLabel } from '@/lib/platform-shortcuts'
 import { sessionAttentionSignature, signatureCleared } from '@/app/session-attention'
-import { IconButton, Modal, OmpMark, PiMark, PrimeMark, useFocusTrap } from './ui'
+import type { SettingsSection } from '@/pages/settings/contracts'
+import { IconButton, Modal, OmpMark, PiMark, useFocusTrap } from './ui'
+import { SETTINGS_SECTIONS } from './settings-sections'
 
 const PROJECT_SORT_LABEL_KEYS = { recent: 'projects.sort.recent', alphabetical: 'projects.sort.alphabetical' } as const satisfies Record<ProjectSortMode, MessageKey>
 
@@ -42,6 +45,9 @@ export interface SidebarProps {
   activeProjectId?: string
   activeSessionId?: string
   activeView: WorkspaceView
+  /** Active settings section; the sidebar becomes the settings navigator while the settings view is open. */
+  activeSettingsSection?: SettingsSection
+  onSelectSettingsSection?(section: SettingsSection): void
   activeHarness?: HarnessId
   harnesses?: AppMeta['harnesses'] | null
   clearedAttention?: Record<string, string>
@@ -118,7 +124,7 @@ function SessionStatusMark({ status, attention }: { status: SessionRecord['statu
   return <span className={`session-status-mark session-status-mark--${status}`} title={title}><span /></span>
 }
 
-const HARNESS_MARKS: Record<HarnessId, (props: { size?: number }) => ReactElement> = { omp: OmpMark, prime: PrimeMark, pi: PiMark }
+const HARNESS_MARKS: Record<HarnessId, (props: { size?: number }) => ReactElement> = { omp: OmpMark, pi: PiMark }
 
 function HarnessMark({ harness, size }: { harness: HarnessId; size: number }) {
   const Mark = HARNESS_MARKS[harness]
@@ -185,7 +191,7 @@ async function copySessionUuid(id: string): Promise<void> {
   if (!copied) throw new Error('Copy is unavailable')
 }
 
-function SidebarView({ projects, sessions, activeProjectId, activeSessionId, activeView, activeHarness = 'omp', harnesses, clearedAttention = {}, updateState = { phase: 'unsupported' }, onUpdateAction, onSelectHarness, onSelectProject, onSelectSession, onNavigate, onNewSession, onAddProject, onRemoveProject, projectSortMode = 'recent', onSetProjectSortMode = () => undefined, onTogglePinProject = () => undefined, onClose, onOpenPalette, onRenameSession, onArchiveSession, overlay = false, platform = 'darwin' }: SidebarProps) {
+function SidebarView({ projects, sessions, activeProjectId, activeSessionId, activeView, activeSettingsSection, onSelectSettingsSection, activeHarness = 'pi', harnesses, clearedAttention = {}, updateState = { phase: 'unsupported' }, onUpdateAction, onSelectHarness, onSelectProject, onSelectSession, onNavigate, onNewSession, onAddProject, onRemoveProject, projectSortMode = 'recent', onSetProjectSortMode = () => undefined, onTogglePinProject = () => undefined, onClose, onOpenPalette, onRenameSession, onArchiveSession, overlay = false, platform = 'darwin' }: SidebarProps) {
   const { t } = useI18n()
   const [query, setQuery] = useState('')
   const [harnessMenuOpen, setHarnessMenuOpen] = useState(false)
@@ -293,27 +299,46 @@ function SidebarView({ projects, sessions, activeProjectId, activeSessionId, act
           ) : null}
         </div>
         <div className="sidebar__title-actions no-drag">
-          <IconButton label={`New session (${newSessionShortcut})`} onClick={() => onNewSession()}><NotebookPen size={16} /></IconButton>
+          {activeView !== 'settings' ? <IconButton label={`New session (${newSessionShortcut})`} onClick={() => onNewSession()}><NotebookPen size={16} /></IconButton> : null}
           <IconButton label={`Hide sidebar (${sidebarShortcut})`} onClick={onClose}><PanelLeftClose size={16} /></IconButton>
         </div>
       </div>
 
       <nav className="sidebar__primary" aria-label="Primary">
-        <button type="button" title={`New session (${newSessionShortcut})`} onClick={() => onNewSession()}><NotebookPen size={15} /><span>New session</span><kbd>{newSessionShortcut}</kbd></button>
-        <button type="button" title="Search" onClick={() => { setSearchOpen((open) => !open); window.setTimeout(() => document.getElementById('session-search')?.focus(), 0) }} className={searchOpen ? 'is-active' : ''}><Search size={15} /><span>Search</span></button>
-        {searchOpen ? (
-          <div className="sidebar-search">
-            <Search size={13} />
-            <input id="session-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Projects, chats, branches" aria-label="Search projects and sessions" />
-            {query ? <button type="button" title="Clear search" aria-label="Clear search" onClick={() => setQuery('')}>×</button> : null}
-          </div>
-        ) : null}
-        <button type="button" title={t('nav.projects')} className={activeView === 'projects' ? 'is-active' : ''} onClick={() => onNavigate('projects')}><Folder size={15} /><span>{t('nav.projects')}</span></button>
-        <button type="button" title={t('nav.activity')} className={activeView === 'activity' ? 'is-active' : ''} onClick={() => onNavigate('activity')}><Bell size={15} /><span>{t('nav.activity')}</span>{unreadCount ? <span className="nav-count">{unreadCount}</span> : null}</button>
-        <button type="button" title={t('nav.scheduled')} className={activeView === 'scheduled' ? 'is-active' : ''} onClick={() => onNavigate('scheduled')}><CalendarClock size={15} /><span>{t('nav.scheduled')}</span></button>
-        <button type="button" title={t('nav.capabilities')} className={activeView === 'plugins' ? 'is-active' : ''} onClick={() => onNavigate('plugins')}><PackageOpen size={15} /><span>{t('nav.capabilities')}</span></button>
+        {activeView === 'settings' ? (
+          <button type="button" title="Back to session" onClick={() => onNavigate('session')}><ArrowLeft size={15} /><span>Back to session</span></button>
+        ) : (
+          <>
+            <button type="button" title={`New session (${newSessionShortcut})`} onClick={() => onNewSession()}><NotebookPen size={15} /><span>New session</span><kbd>{newSessionShortcut}</kbd></button>
+            <button type="button" title="Search" onClick={() => { setSearchOpen((open) => !open); window.setTimeout(() => document.getElementById('session-search')?.focus(), 0) }} className={searchOpen ? 'is-active' : ''}><Search size={15} /><span>Search</span></button>
+            {searchOpen ? (
+              <div className="sidebar-search">
+                <Search size={13} />
+                <input id="session-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Projects, chats, branches" aria-label="Search projects and sessions" />
+                {query ? <button type="button" title="Clear search" aria-label="Clear search" onClick={() => setQuery('')}>×</button> : null}
+              </div>
+            ) : null}
+            <button type="button" title={t('nav.projects')} className={activeView === 'projects' ? 'is-active' : ''} onClick={() => onNavigate('projects')}><Folder size={15} /><span>{t('nav.projects')}</span></button>
+            <button type="button" title={t('nav.activity')} className={activeView === 'activity' ? 'is-active' : ''} onClick={() => onNavigate('activity')}><Bell size={15} /><span>{t('nav.activity')}</span>{unreadCount ? <span className="nav-count">{unreadCount}</span> : null}</button>
+            <button type="button" title={t('nav.scheduled')} className={activeView === 'scheduled' ? 'is-active' : ''} onClick={() => onNavigate('scheduled')}><CalendarClock size={15} /><span>{t('nav.scheduled')}</span></button>
+            <button type="button" title={t('nav.capabilities')} className={activeView === 'plugins' ? 'is-active' : ''} onClick={() => onNavigate('plugins')}><PackageOpen size={15} /><span>{t('nav.capabilities')}</span></button>
+          </>
+        )}
       </nav>
 
+      {activeView === 'settings' ? (
+        <div className="sidebar__scroll scroll-area">
+          <div className="sidebar__section-heading"><span>{t('nav.settings')}</span></div>
+          {SETTINGS_SECTIONS.map((item) => {
+            const Icon = item.icon
+            return (
+              <button type="button" key={item.id} className={`sidebar__section-item ${activeSettingsSection === item.id ? 'is-active' : ''}`} onClick={() => onSelectSettingsSection?.(item.id)}>
+                <Icon size={14} /><span>{t(item.label)}</span>
+              </button>
+            )
+          })}
+        </div>
+      ) : (
       <div className="sidebar__scroll scroll-area">
         <div className="sidebar__section-heading"><span>Projects</span><span className="sidebar__section-heading-actions"><IconButton size="small" className="sidebar__sort-toggle" aria-haspopup="menu" aria-expanded={projectSortMenuOpen} label={t('projects.sort')} onClick={() => setProjectSortMenuOpen((open) => !open)}><ListFilter size={13} /></IconButton><IconButton size="small" label="Add project" onClick={onAddProject}><FolderPlus size={13} /></IconButton>{projectSortMenuOpen ? <div className="sidebar__sort-menu" role="menu" aria-label={t('projects.sort.menu')}>{PROJECT_SORT_MODES.map((mode) => <button key={mode} type="button" role="menuitemradio" aria-checked={projectSortMode === mode} className={projectSortMode === mode ? 'is-active' : ''} onClick={() => { setProjectSortMenuOpen(false); onSetProjectSortMode(mode) }}>{t(PROJECT_SORT_LABEL_KEYS[mode])}{projectSortMode === mode ? <Check size={12} aria-hidden="true" /> : null}</button>)}</div> : null}</span></div>
         {visibleProjects.length === 0 ? <p className="sidebar__empty">No matching work</p> : null}
@@ -370,6 +395,7 @@ function SidebarView({ projects, sessions, activeProjectId, activeSessionId, act
           )
         })}
       </div>
+      )}
 
       <div className="sidebar__footer">
         <button type="button" title="Commands" onClick={onOpenPalette}><Search size={15} /><span>Commands</span><kbd>{commandsShortcut}</kbd></button>
@@ -404,6 +430,8 @@ export function areSidebarPropsEqual(previous: SidebarProps, next: SidebarProps)
     && previous.activeProjectId === next.activeProjectId
     && previous.activeSessionId === next.activeSessionId
     && previous.activeView === next.activeView
+    && previous.activeSettingsSection === next.activeSettingsSection
+    && previous.onSelectSettingsSection === next.onSelectSettingsSection
     && previous.activeHarness === next.activeHarness
     && previous.harnesses === next.harnesses
     && previous.clearedAttention === next.clearedAttention

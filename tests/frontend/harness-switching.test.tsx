@@ -11,6 +11,7 @@ import { DEFAULT_SETTINGS } from '../../src/lib/data'
 import { AgentSettings } from '../../src/pages/settings/AgentSettings'
 import { ProviderSettings } from '../../src/pages/settings/ProviderSettings'
 import { SettingsPage } from '../../src/pages/SettingsPage'
+import type { SettingsSection } from '../../src/pages/settings/contracts'
 import type { AppMeta, AppSettings, HarnessId, PrimeModelCatalog, PrimeWorkApi, ProjectRecord, RuntimeInfo, SessionRecord } from '../../src/types/api'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -28,30 +29,26 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve, reject }
 }
 
-const primeProject: ProjectRecord = {
-  id: 'prime-project', harness: 'prime', name: 'Prime project', path: '/prime', folders: ['/prime'], primaryFolder: '/prime', pinned: false,
+const piProject: ProjectRecord = {
+  id: 'pi-project', harness: 'pi', name: 'Pi project', path: '/pi', folders: ['/pi'], primaryFolder: '/pi', pinned: false,
   createdAt: '2026-01-01T00:00:00.000Z', lastOpenedAt: '2026-01-01T00:00:00.000Z', sessionCount: 1,
 }
-const primeSession: SessionRecord = {
-  id: 'prime-session', harness: 'prime', projectPath: '/prime', filePath: '/prime-sessions/current.jsonl', title: 'Prime session',
+const piSession: SessionRecord = {
+  id: 'pi-session', harness: 'pi', projectPath: '/pi', filePath: '/pi-sessions/current.jsonl', title: 'Pi session',
   createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', status: 'idle', depth: 0,
 }
-const ompProject: ProjectRecord = { ...primeProject, id: 'omp-project', harness: 'omp', name: 'OMP project', path: '/omp', folders: ['/omp'], primaryFolder: '/omp' }
-const ompSession: SessionRecord = { ...primeSession, id: 'omp-session', harness: 'omp', projectPath: '/omp', filePath: '/omp-sessions/current.jsonl', title: 'OMP session' }
-const piProject: ProjectRecord = { ...primeProject, id: 'pi-project', harness: 'pi', name: 'Pi project', path: '/pi', folders: ['/pi'], primaryFolder: '/pi' }
-const piSession: SessionRecord = { ...primeSession, id: 'pi-session', harness: 'pi', projectPath: '/pi', filePath: '/pi-sessions/current.jsonl', title: 'Pi session' }
-const primeRuntime: RuntimeInfo = { runtimeId: 'prime-runtime', harness: 'prime', cwd: '/prime', sessionFile: primeSession.filePath, isStreaming: false }
+const ompProject: ProjectRecord = { ...piProject, id: 'omp-project', harness: 'omp', name: 'OMP project', path: '/omp', folders: ['/omp'], primaryFolder: '/omp' }
+const ompSession: SessionRecord = { ...piSession, id: 'omp-session', harness: 'omp', projectPath: '/omp', filePath: '/omp-sessions/current.jsonl', title: 'OMP session' }
 const ompRuntime: RuntimeInfo = { runtimeId: 'omp-runtime', harness: 'omp', cwd: '/omp', sessionFile: ompSession.filePath, isStreaming: false }
 const piRuntime: RuntimeInfo = { runtimeId: 'pi-runtime', harness: 'pi', cwd: '/pi', sessionFile: piSession.filePath, isStreaming: false }
 
 const meta: AppMeta = {
   version: '1', platform: 'darwin', homeDir: '/Users/you',
-  harnesses: { prime: { path: '/usr/local/bin/prime-agent', version: '0.7.0' }, omp: { path: null, version: null }, pi: { path: null, version: null } },
+  harnesses: { omp: { path: null, version: null }, pi: { path: '/usr/local/bin/pi', version: '0.84.1' } },
 }
 const allDetectedMeta: AppMeta = {
   ...meta,
   harnesses: {
-    prime: meta.harnesses.prime,
     omp: { path: '/usr/local/bin/omp', version: '17.2.11' },
     pi: { path: '/usr/local/bin/pi', version: '0.84.1' },
   },
@@ -90,9 +87,9 @@ async function select(element: HTMLSelectElement, value: string) {
 
 describe('bootstrap harness switching', () => {
   function makeBridge() {
-    const projectsList = vi.fn(async (harness?: HarnessId) => harness === 'omp' ? [ompProject] : harness === 'pi' ? [piProject] : [primeProject])
-    const sessionsList = vi.fn(async (_projectPath?: string, _includeArchived?: boolean, harness?: HarnessId) => harness === 'omp' ? [ompSession] : harness === 'pi' ? [piSession] : [primeSession])
-    const agentList = vi.fn(async () => [primeRuntime, ompRuntime, piRuntime])
+    const projectsList = vi.fn(async (harness?: HarnessId) => harness === 'omp' ? [ompProject] : [piProject])
+    const sessionsList = vi.fn(async (_projectPath?: string, _includeArchived?: boolean, harness?: HarnessId) => harness === 'omp' ? [ompSession] : [piSession])
+    const agentList = vi.fn(async () => [ompRuntime, piRuntime])
     const bridge = {
       projects: { list: projectsList },
       sessions: { list: sessionsList, onChanged: () => () => undefined },
@@ -167,49 +164,35 @@ describe('bootstrap harness switching', () => {
       })
       return <Probe />
     }
-    await act(async () => { root.render(<BootstrapProbe harness="prime" />); await Promise.resolve(); await Promise.resolve() })
-    expect(projectsList).toHaveBeenLastCalledWith('prime')
-    expect(sessionsList).toHaveBeenLastCalledWith(undefined, true, 'prime')
-    expect(workspace.activated).toEqual([{ project: primeProject, session: primeSession }])
-    expect(onHarnessSwitch).not.toHaveBeenCalled()
-    await act(async () => { await Promise.resolve() })
-    expect(workspace.attached).toEqual([primeRuntime])
-
     await act(async () => { root.render(<BootstrapProbe harness="omp" />); await Promise.resolve(); await Promise.resolve() })
     expect(projectsList).toHaveBeenLastCalledWith('omp')
     expect(sessionsList).toHaveBeenLastCalledWith(undefined, true, 'omp')
+    expect(workspace.activated).toEqual([{ project: ompProject, session: ompSession }])
+    expect(onHarnessSwitch).not.toHaveBeenCalled()
+    await act(async () => { await Promise.resolve() })
+    expect(workspace.attached).toEqual([ompRuntime])
+
+    await act(async () => { root.render(<BootstrapProbe harness="pi" />); await Promise.resolve(); await Promise.resolve() })
+    expect(projectsList).toHaveBeenLastCalledWith('pi')
+    expect(sessionsList).toHaveBeenLastCalledWith(undefined, true, 'pi')
     expect(onHarnessSwitch).toHaveBeenCalledTimes(1)
     // The switch clears the visible catalog before the new harness loads.
     expect(setProjects).toHaveBeenCalledWith([])
     expect(setSessions).toHaveBeenCalledWith([])
     // Generation-bumping reset first, then the new harness's startup workspace.
     expect(workspace.activated).toEqual([
-      { project: primeProject, session: primeSession },
-      { project: undefined, session: undefined },
-      { project: ompProject, session: ompSession },
-    ])
-    await act(async () => { await Promise.resolve() })
-    expect(workspace.attached).toEqual([primeRuntime, ompRuntime])
-
-    await act(async () => { root.render(<BootstrapProbe harness="pi" />); await Promise.resolve(); await Promise.resolve() })
-    expect(projectsList).toHaveBeenLastCalledWith('pi')
-    expect(sessionsList).toHaveBeenLastCalledWith(undefined, true, 'pi')
-    expect(onHarnessSwitch).toHaveBeenCalledTimes(2)
-    expect(workspace.activated).toEqual([
-      { project: primeProject, session: primeSession },
-      { project: undefined, session: undefined },
       { project: ompProject, session: ompSession },
       { project: undefined, session: undefined },
       { project: piProject, session: piSession },
     ])
     await act(async () => { await Promise.resolve() })
-    expect(workspace.attached).toEqual([primeRuntime, ompRuntime, piRuntime])
+    expect(workspace.attached).toEqual([ompRuntime, piRuntime])
   })
 
   it('skips the startup activation when the user changes the workspace mid-fetch', async () => {
     const projects = deferred<ProjectRecord[]>()
     const bridge = {
-      projects: { list: vi.fn((harness?: HarnessId) => harness === 'omp' ? projects.promise : Promise.resolve([primeProject])) },
+      projects: { list: vi.fn((harness?: HarnessId) => harness === 'omp' ? projects.promise : Promise.resolve([piProject])) },
       sessions: { list: async () => [ompSession], onChanged: () => () => undefined },
       agent: { list: async () => [] },
       app: { getMeta: async () => meta },
@@ -232,7 +215,7 @@ describe('bootstrap harness switching', () => {
       })
       return <Probe />
     }
-    await act(async () => { root.render(<BootstrapProbe harness="prime" />); await Promise.resolve(); await Promise.resolve() })
+    await act(async () => { root.render(<BootstrapProbe harness="pi" />); await Promise.resolve(); await Promise.resolve() })
     await act(async () => { root.render(<BootstrapProbe harness="omp" />) })
     const activationsBeforeResolve = workspace.activated.length
     // The user activates something else while the omp catalog is in flight.
@@ -243,7 +226,7 @@ describe('bootstrap harness switching', () => {
 
   it('only refreshes the session catalog for matching sessions:changed events', async () => {
     let onChangedCallback: ((event: { filePath?: string; harness?: HarnessId }) => void) | undefined
-    const sessionsList = vi.fn(async (_p?: string, _a?: boolean, harness?: HarnessId) => harness === 'omp' ? [ompSession] : [primeSession])
+    const sessionsList = vi.fn(async (_p?: string, _a?: boolean, harness?: HarnessId) => harness === 'omp' ? [ompSession] : [piSession])
     const bridge = {
       projects: { list: async () => [ompProject] },
       sessions: {
@@ -275,10 +258,10 @@ describe('bootstrap harness switching', () => {
       }
       await act(async () => { root.render(<BootstrapProbe />); await Promise.resolve(); await Promise.resolve() })
       const listCalls = sessionsList.mock.calls.length
-      // Prime catalog change (and legacy events without a harness) are ignored.
+      // Pi catalog change (and legacy events without a harness) are ignored.
       act(() => {
-        onChangedCallback?.({ filePath: primeSession.filePath, harness: 'prime' })
-        onChangedCallback?.({ filePath: primeSession.filePath })
+        onChangedCallback?.({ filePath: piSession.filePath, harness: 'pi' })
+        onChangedCallback?.({ filePath: piSession.filePath })
       })
       await act(async () => { vi.advanceTimersByTime(200); await Promise.resolve() })
       expect(sessionsList.mock.calls.length).toBe(listCalls)
@@ -303,9 +286,9 @@ describe('inactive harness event isolation', () => {
     const setRuntime = vi.fn()
     const queueAgentEvent = vi.fn()
     const reconcileTranscriptForEvent = vi.fn()
-    // The workspace shows the OMP harness; a prime runtime keeps streaming in
+    // The workspace shows the OMP harness; a pi runtime keeps streaming in
     // the background with its session file still registered.
-    const runtimeSessionsRef = { current: new Map([[primeRuntime.runtimeId, primeSession.filePath]]) }
+    const runtimeSessionsRef = { current: new Map([[piRuntime.runtimeId, piSession.filePath]]) }
     function AgentEventsProbe() {
       useAgentEvents({
         bridge,
@@ -327,9 +310,9 @@ describe('inactive harness event isolation', () => {
     }
     await act(async () => { root.render(<AgentEventsProbe />) })
     act(() => {
-      handler({ runtimeId: primeRuntime.runtimeId, event: { type: 'agent_start' } })
-      handler({ runtimeId: primeRuntime.runtimeId, event: { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'x' } } })
-      handler({ runtimeId: primeRuntime.runtimeId, event: { type: 'agent_end' } })
+      handler({ runtimeId: piRuntime.runtimeId, event: { type: 'agent_start' } })
+      handler({ runtimeId: piRuntime.runtimeId, event: { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'x' } } })
+      handler({ runtimeId: piRuntime.runtimeId, event: { type: 'agent_end' } })
     })
     // Lifecycle updates only touch records whose filePath matches; the visible
     // OMP catalog has none, so the session list is unchanged.
@@ -357,10 +340,10 @@ describe('provider fallback runtime state', () => {
     function AgentEventsProbe() {
       useAgentEvents({
         bridge,
-        runtimeIdRef: { current: primeRuntime.runtimeId },
+        runtimeIdRef: { current: ompRuntime.runtimeId },
         runtimeSessionsRef: { current: new Map() },
         runtimeOwnerRef: { current: null },
-        workspaceRef: { current: { generation: 0, sessionFile: primeSession.filePath, cwd: '/prime' } },
+        workspaceRef: { current: { generation: 0, sessionFile: ompSession.filePath, cwd: '/omp' } },
         setSessions: vi.fn(),
         setRuntime,
         queueAgentEvent: vi.fn(),
@@ -376,11 +359,11 @@ describe('provider fallback runtime state', () => {
 
     await act(async () => { root.render(<AgentEventsProbe />) })
     act(() => {
-      handler({ runtimeId: primeRuntime.runtimeId, event: { type: 'retry_fallback_applied', from: 'anthropic/claude-opus', to: 'anthropic/claude-sonnet', role: 'fallback' } })
+      handler({ runtimeId: ompRuntime.runtimeId, event: { type: 'retry_fallback_applied', from: 'anthropic/claude-opus', to: 'anthropic/claude-sonnet', role: 'fallback' } })
     })
 
     const update = setRuntime.mock.calls.at(-1)?.[0] as (current: RuntimeInfo) => RuntimeInfo
-    const next = update({ ...primeRuntime, model: { provider: 'provider', id: 'vision' } })
+    const next = update({ ...ompRuntime, model: { provider: 'provider', id: 'vision' } })
     expect(next.model).toEqual({ provider: 'provider', id: 'vision' })
     expect(next.executingModel).toEqual({
       provider: 'anthropic',
@@ -389,15 +372,15 @@ describe('provider fallback runtime state', () => {
       isFallback: true,
     })
 
-    act(() => { handler({ runtimeId: primeRuntime.runtimeId, event: { type: 'retry_fallback_succeeded', model: 'anthropic/claude-sonnet', role: 'fallback' } }) })
+    act(() => { handler({ runtimeId: ompRuntime.runtimeId, event: { type: 'retry_fallback_succeeded', model: 'anthropic/claude-sonnet', role: 'fallback' } }) })
     const succeededUpdate = setRuntime.mock.calls.at(-1)?.[0] as (current: RuntimeInfo) => RuntimeInfo
     expect(succeededUpdate(next).executingModel).toEqual(next.executingModel)
 
     const callsBeforeModelChanged = setRuntime.mock.calls.length
-    act(() => { handler({ runtimeId: primeRuntime.runtimeId, event: { type: 'model_changed' } }) })
+    act(() => { handler({ runtimeId: ompRuntime.runtimeId, event: { type: 'model_changed' } }) })
     expect(setRuntime.mock.calls).toHaveLength(callsBeforeModelChanged)
 
-    act(() => { handler({ runtimeId: primeRuntime.runtimeId, event: { type: 'agent_start' } }) })
+    act(() => { handler({ runtimeId: ompRuntime.runtimeId, event: { type: 'agent_start' } }) })
     const reset = setRuntime.mock.calls.at(-1)?.[0] as (current: RuntimeInfo) => RuntimeInfo
     expect(reset({ ...next }).executingModel).toBeNull()
   })
@@ -405,12 +388,12 @@ describe('provider fallback runtime state', () => {
 
 describe('sidebar brand switcher', () => {
   const noop = () => undefined
-  function renderSidebar(onSelectHarness: (harness: HarnessId) => void, activeHarness: HarnessId = 'prime', appMeta = meta) {
+  function renderSidebar(onSelectHarness: (harness: HarnessId) => void, activeHarness: HarnessId = 'pi', appMeta = meta) {
     return act(async () => {
       root.render(
         <Sidebar
-          projects={[primeProject]}
-          sessions={[primeSession]}
+          projects={[piProject]}
+          sessions={[piSession]}
           activeView="session"
           activeHarness={activeHarness}
           harnesses={appMeta.harnesses}
@@ -438,13 +421,13 @@ describe('sidebar brand switcher', () => {
     expect(trigger).not.toBeNull()
     expect(trigger!.getAttribute('aria-haspopup')).toBe('menu')
     expect(trigger!.getAttribute('aria-expanded')).toBe('false')
-    expect(trigger!.textContent).toContain('Prime')
+    expect(trigger!.textContent).toContain('Pi')
 
     await click(trigger!)
     const menu = container.querySelector('[role="menu"]')
     expect(menu).not.toBeNull()
     const options = [...menu!.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')]
-    expect(options.map((option) => option.textContent)).toEqual(['Prime Work'])
+    expect(options.map((option) => option.textContent)).toEqual(['Pi Work'])
     expect(options[0].getAttribute('aria-checked')).toBe('true')
 
     await click(options[0])
@@ -452,14 +435,14 @@ describe('sidebar brand switcher', () => {
     expect(container.querySelector('[role="menu"]')).toBeNull()
   })
 
-  it('switches to Pi from the brand switcher', async () => {
+  it('switches to OMP from the brand switcher', async () => {
     const onSelectHarness = vi.fn()
-    await renderSidebar(onSelectHarness, 'prime', allDetectedMeta)
+    await renderSidebar(onSelectHarness, 'pi', allDetectedMeta)
 
     await click(container.querySelector('.brand-switcher__trigger')!)
     const options = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')]
-    await click(options[0])
-    expect(onSelectHarness).toHaveBeenCalledWith('pi')
+    await click(options[1])
+    expect(onSelectHarness).toHaveBeenCalledWith('omp')
     expect(container.querySelector('[role="menu"]')).toBeNull()
   })
 
@@ -479,8 +462,8 @@ describe('sidebar brand switcher', () => {
 })
 
 describe('provider catalog per harness', () => {
-  const primeCatalog: PrimeModelCatalog = {
-    primeVersion: '0.7.0', refreshedAt: '2026-08-06T00:00:00.000Z',
+  const piCatalog: PrimeModelCatalog = {
+    primeVersion: '0.84.1', refreshedAt: '2026-08-06T00:00:00.000Z',
     models: [{ key: 'openai-codex/gpt-5.6', provider: 'openai-codex', id: 'gpt-5.6', name: 'GPT-5.6', reasoning: true, input: ['text'], contextWindow: 400_000, maxTokens: 128_000, availableThinkingLevels: ['low', 'medium', 'high'], fastModeSupported: true, available: true }],
     providers: [{ id: 'openai-codex', name: 'ChatGPT Plus/Pro', authMethod: 'oauth', configured: true, modelCount: 1, availableModelCount: 1, enabled: true }],
   }
@@ -491,26 +474,26 @@ describe('provider catalog per harness', () => {
   }
 
   it('waits for persisted settings before loading a provider catalog', async () => {
-    const catalog = vi.fn(async () => primeCatalog)
+    const catalog = vi.fn(async () => piCatalog)
     const bridge = {
       providers: { catalog, onAuthEvent: vi.fn().mockReturnValue(() => undefined) },
     } as unknown as PrimeWorkApi
     const reportError = vi.fn()
     function CatalogProbe({ ready }: { ready: boolean }) {
-      useProviderCatalog({ bridge, ready, harness: 'prime', runtime: null, syncRuntime: async () => undefined, reportError })
+      useProviderCatalog({ bridge, ready, harness: 'pi', runtime: null, syncRuntime: async () => undefined, reportError })
       return <Probe />
     }
 
     await act(async () => { root.render(<CatalogProbe ready={false} />); await Promise.resolve() })
     expect(catalog).not.toHaveBeenCalled()
     await act(async () => { root.render(<CatalogProbe ready />); await Promise.resolve() })
-    expect(catalog).toHaveBeenCalledWith(false, 'prime')
+    expect(catalog).toHaveBeenCalledWith(false, 'pi')
   })
 
   it('fetches per harness, caches catalogs, and selects the first usable model on switch', async () => {
     const thirdFetch = deferred<PrimeModelCatalog>()
     const catalogMock = vi.fn()
-      .mockResolvedValueOnce(primeCatalog)
+      .mockResolvedValueOnce(piCatalog)
       .mockResolvedValueOnce(ompCatalog)
       .mockImplementationOnce(() => thirdFetch.promise)
     const bridge = {
@@ -523,9 +506,9 @@ describe('provider catalog per harness', () => {
       state = useProviderCatalog({ bridge, harness, runtime: null, syncRuntime, reportError })
       return <Probe />
     }
-    await act(async () => { root.render(<CatalogProbe harness="prime" />); await Promise.resolve() })
-    expect(catalogMock).toHaveBeenNthCalledWith(1, false, 'prime')
-    expect(state.catalog).toBe(primeCatalog)
+    await act(async () => { root.render(<CatalogProbe harness="pi" />); await Promise.resolve() })
+    expect(catalogMock).toHaveBeenNthCalledWith(1, false, 'pi')
+    expect(state.catalog).toBe(piCatalog)
 
     act(() => state.changeModel('openai-codex/gpt-5.6'))
     expect(state.model).toBe('openai-codex/gpt-5.6')
@@ -536,16 +519,16 @@ describe('provider catalog per harness', () => {
     expect(state.model).toBe('openai-codex/gpt-5.6-luna')
     expect(state.fast).toBe(false)
 
-    // Switching back shows the cached prime catalog while the refresh hangs.
-    await act(async () => { root.render(<CatalogProbe harness="prime" />) })
-    expect(catalogMock).toHaveBeenNthCalledWith(3, false, 'prime')
-    expect(state.catalog).toBe(primeCatalog)
+    // Switching back shows the cached pi catalog while the refresh hangs.
+    await act(async () => { root.render(<CatalogProbe harness="pi" />) })
+    expect(catalogMock).toHaveBeenNthCalledWith(3, false, 'pi')
+    expect(state.catalog).toBe(piCatalog)
     expect(state.model).toBe('openai-codex/gpt-5.6')
   })
 
   it('restores a usable remembered model and replaces a stale preference with the first usable model', async () => {
-    const alternate = { ...primeCatalog.models[0], key: 'openai-codex/gpt-5.5', id: 'gpt-5.5', name: 'GPT-5.5' }
-    const catalog = { ...primeCatalog, models: [primeCatalog.models[0], alternate] }
+    const alternate = { ...piCatalog.models[0], key: 'openai-codex/gpt-5.5', id: 'gpt-5.5', name: 'GPT-5.5' }
+    const catalog = { ...piCatalog, models: [piCatalog.models[0], alternate] }
     const bridge = {
       providers: { catalog: vi.fn(async () => catalog), onAuthEvent: vi.fn().mockReturnValue(() => undefined) },
     } as unknown as PrimeWorkApi
@@ -553,7 +536,7 @@ describe('provider catalog per harness', () => {
     const reportError = vi.fn()
     let state!: ReturnType<typeof useProviderCatalog>
     function CatalogProbe({ lastSelectedModel }: { lastSelectedModel: string }) {
-      state = useProviderCatalog({ bridge, harness: 'prime', runtime: null, lastSelectedModel, rememberModel, syncRuntime: async () => undefined, reportError })
+      state = useProviderCatalog({ bridge, harness: 'pi', runtime: null, lastSelectedModel, rememberModel, syncRuntime: async () => undefined, reportError })
       return <Probe />
     }
 
@@ -562,25 +545,25 @@ describe('provider catalog per harness', () => {
     expect(rememberModel).not.toHaveBeenCalled()
 
     await act(async () => { root.render(<CatalogProbe key="stale-preference" lastSelectedModel="missing/model" />); await Promise.resolve() })
-    expect(state.model).toBe(primeCatalog.models[0].key)
-    expect(rememberModel).toHaveBeenLastCalledWith(primeCatalog.models[0].key)
+    expect(state.model).toBe(piCatalog.models[0].key)
+    expect(rememberModel).toHaveBeenLastCalledWith(piCatalog.models[0].key)
   })
 
   it('syncs model and thinking level from active session metadata when runtime has no live model', async () => {
-    const alternate = { ...primeCatalog.models[0], key: 'openai-codex/gpt-5.5', id: 'gpt-5.5', name: 'GPT-5.5' }
-    const catalog = { ...primeCatalog, models: [primeCatalog.models[0], alternate] }
+    const alternate = { ...piCatalog.models[0], key: 'openai-codex/gpt-5.5', id: 'gpt-5.5', name: 'GPT-5.5' }
+    const catalog = { ...piCatalog, models: [piCatalog.models[0], alternate] }
     const bridge = {
       providers: { catalog: vi.fn(async () => catalog), onAuthEvent: vi.fn().mockReturnValue(() => undefined) },
     } as unknown as PrimeWorkApi
     const reportError = vi.fn()
     let state!: ReturnType<typeof useProviderCatalog>
     function CatalogProbe({ activeSession }: { activeSession?: SessionRecord }) {
-      state = useProviderCatalog({ bridge, harness: 'prime', runtime: null, activeSession, syncRuntime: async () => undefined, reportError })
+      state = useProviderCatalog({ bridge, harness: 'pi', runtime: null, activeSession, syncRuntime: async () => undefined, reportError })
       return <Probe />
     }
 
     const sessionA: SessionRecord = {
-      ...primeSession,
+      ...piSession,
       id: 'session-a',
       provider: 'openai-codex',
       model: 'gpt-5.5',
@@ -588,10 +571,10 @@ describe('provider catalog per harness', () => {
     }
 
     const sessionB: SessionRecord = {
-      ...primeSession,
+      ...piSession,
       id: 'session-b',
       provider: 'openai-codex',
-      model: primeCatalog.models[0].id,
+      model: piCatalog.models[0].id,
       thinkingLevel: 'high',
     }
 
@@ -600,7 +583,7 @@ describe('provider catalog per harness', () => {
     expect(state.effort).toBe('low')
 
     await act(async () => { root.render(<CatalogProbe activeSession={sessionB} />); await Promise.resolve() })
-    expect(state.model).toBe(primeCatalog.models[0].key)
+    expect(state.model).toBe(piCatalog.models[0].key)
     expect(state.effort).toBe('high')
 
     await act(async () => { root.render(<CatalogProbe activeSession={sessionA} />); await Promise.resolve() })
@@ -608,35 +591,35 @@ describe('provider catalog per harness', () => {
     expect(state.effort).toBe('low')
 
     await act(async () => { root.render(<CatalogProbe activeSession={sessionB} />); await Promise.resolve() })
-    expect(state.model).toBe(primeCatalog.models[0].key)
+    expect(state.model).toBe(piCatalog.models[0].key)
     expect(state.effort).toBe('high')
   })
 
   it('keeps an unsent selection per tab and prefers it over session metadata', async () => {
-    const alternate = { ...primeCatalog.models[0], key: 'openai-codex/gpt-5.5', id: 'gpt-5.5', name: 'GPT-5.5' }
-    const catalog = { ...primeCatalog, models: [primeCatalog.models[0], alternate] }
+    const alternate = { ...piCatalog.models[0], key: 'openai-codex/gpt-5.5', id: 'gpt-5.5', name: 'GPT-5.5' }
+    const catalog = { ...piCatalog, models: [piCatalog.models[0], alternate] }
     const bridge = {
       providers: { catalog: vi.fn(async () => catalog), onAuthEvent: vi.fn().mockReturnValue(() => undefined) },
     } as unknown as PrimeWorkApi
     const reportError = vi.fn()
     let state!: ReturnType<typeof useProviderCatalog>
     function CatalogProbe({ activeSession }: { activeSession?: SessionRecord }) {
-      state = useProviderCatalog({ bridge, harness: 'prime', runtime: null, activeSession, syncRuntime: async () => undefined, reportError })
+      state = useProviderCatalog({ bridge, harness: 'pi', runtime: null, activeSession, syncRuntime: async () => undefined, reportError })
       return <Probe />
     }
 
     const sessionA: SessionRecord = {
-      ...primeSession,
+      ...piSession,
       id: 'session-a',
       provider: 'openai-codex',
       model: 'gpt-5.5',
       thinkingLevel: 'low',
     }
     const sessionB: SessionRecord = {
-      ...primeSession,
+      ...piSession,
       id: 'session-b',
       provider: 'openai-codex',
-      model: primeCatalog.models[0].id,
+      model: piCatalog.models[0].id,
       thinkingLevel: 'high',
     }
 
@@ -644,14 +627,14 @@ describe('provider catalog per harness', () => {
     expect(state.model).toBe('openai-codex/gpt-5.5')
     expect(state.effort).toBe('low')
 
-    act(() => state.changeModel(primeCatalog.models[0].key))
+    act(() => state.changeModel(piCatalog.models[0].key))
     act(() => state.changeEffort('high'))
     await act(async () => { root.render(<CatalogProbe activeSession={sessionB} />); await Promise.resolve() })
-    expect(state.model).toBe(primeCatalog.models[0].key)
+    expect(state.model).toBe(piCatalog.models[0].key)
     expect(state.effort).toBe('high')
 
     await act(async () => { root.render(<CatalogProbe activeSession={sessionA} />); await Promise.resolve() })
-    expect(state.model).toBe(primeCatalog.models[0].key)
+    expect(state.model).toBe(piCatalog.models[0].key)
     expect(state.effort).toBe('high')
 
     await act(async () => { root.render(<CatalogProbe activeSession={undefined} />); await Promise.resolve() })
@@ -662,30 +645,30 @@ describe('provider catalog per harness', () => {
   })
 
   it('prefers the live runtime model over session metadata', async () => {
-    const alternate = { ...primeCatalog.models[0], key: 'openai-codex/gpt-5.5', id: 'gpt-5.5', name: 'GPT-5.5' }
-    const catalog = { ...primeCatalog, models: [primeCatalog.models[0], alternate] }
+    const alternate = { ...piCatalog.models[0], key: 'openai-codex/gpt-5.5', id: 'gpt-5.5', name: 'GPT-5.5' }
+    const catalog = { ...piCatalog, models: [piCatalog.models[0], alternate] }
     const bridge = {
       providers: { catalog: vi.fn(async () => catalog), onAuthEvent: vi.fn().mockReturnValue(() => undefined) },
     } as unknown as PrimeWorkApi
     const reportError = vi.fn()
     let state!: ReturnType<typeof useProviderCatalog>
     function CatalogProbe({ runtime, activeSession }: { runtime: RuntimeInfo | null; activeSession?: SessionRecord }) {
-      state = useProviderCatalog({ bridge, harness: 'prime', runtime, activeSession, syncRuntime: async () => undefined, reportError })
+      state = useProviderCatalog({ bridge, harness: 'pi', runtime, activeSession, syncRuntime: async () => undefined, reportError })
       return <Probe />
     }
 
     const sessionB: SessionRecord = {
-      ...primeSession,
+      ...piSession,
       id: 'session-b',
       provider: 'openai-codex',
-      model: primeCatalog.models[0].id,
+      model: piCatalog.models[0].id,
       thinkingLevel: 'high',
     }
 
     await act(async () => {
       root.render(<CatalogProbe
         activeSession={sessionB}
-        runtime={{ ...primeRuntime, model: { provider: 'openai-codex', id: 'gpt-5.5' }, thinkingLevel: 'low' }}
+        runtime={{ ...ompRuntime, model: { provider: 'openai-codex', id: 'gpt-5.5' }, thinkingLevel: 'low' }}
       />)
       await Promise.resolve()
     })
@@ -694,8 +677,8 @@ describe('provider catalog per harness', () => {
   })
 
   it('does not revert a selection when the catalog refreshes for the same session', async () => {
-    const alternate = { ...primeCatalog.models[0], key: 'openai-codex/gpt-5.5', id: 'gpt-5.5', name: 'GPT-5.5' }
-    const catalog = { ...primeCatalog, models: [primeCatalog.models[0], alternate] }
+    const alternate = { ...piCatalog.models[0], key: 'openai-codex/gpt-5.5', id: 'gpt-5.5', name: 'GPT-5.5' }
+    const catalog = { ...piCatalog, models: [piCatalog.models[0], alternate] }
     const catalogMock = vi.fn()
       .mockResolvedValueOnce(catalog)
       .mockImplementation(async (force: boolean) => force ? { ...catalog } : catalog)
@@ -705,12 +688,12 @@ describe('provider catalog per harness', () => {
     const reportError = vi.fn()
     let state!: ReturnType<typeof useProviderCatalog>
     function CatalogProbe({ activeSession }: { activeSession?: SessionRecord }) {
-      state = useProviderCatalog({ bridge, harness: 'prime', runtime: null, activeSession, syncRuntime: async () => undefined, reportError })
+      state = useProviderCatalog({ bridge, harness: 'pi', runtime: null, activeSession, syncRuntime: async () => undefined, reportError })
       return <Probe />
     }
 
     const sessionA: SessionRecord = {
-      ...primeSession,
+      ...piSession,
       id: 'session-a',
       provider: 'openai-codex',
       model: 'gpt-5.5',
@@ -718,38 +701,33 @@ describe('provider catalog per harness', () => {
     }
 
     await act(async () => { root.render(<CatalogProbe activeSession={sessionA} />); await Promise.resolve() })
-    act(() => state.changeModel(primeCatalog.models[0].key))
+    act(() => state.changeModel(piCatalog.models[0].key))
     await act(async () => { await state.refresh(true) })
-    expect(state.model).toBe(primeCatalog.models[0].key)
+    expect(state.model).toBe(piCatalog.models[0].key)
   })
 })
 
 describe('harness settings surfaces', () => {
-  it('follows a changed initial section while the settings page stays mounted', async () => {
+  it('renders the settings section selected through the sidebar', async () => {
     const noop = () => undefined
     const noopAsync = async () => undefined
-    const renderSettings = (initialSection: 'general' | 'agent', initialSectionRequestId = 0) => (
+    const renderSettings = (section: SettingsSection) => (
       <SettingsPage
         settings={DEFAULT_SETTINGS}
         meta={meta}
         providerCatalog={null}
         voice={null}
         pets={null}
-        initialSection={initialSection}
-        initialSectionRequestId={initialSectionRequestId}
-        onClose={noop}
+        section={section}
         onUpdate={noop}
         onResetBrowser={noop}
         onOpenDocs={noop}
         onRefreshProviders={noopAsync}
         onRefreshHarnesses={noopAsync}
-        onSaveProviderApiKey={noopAsync}
-        onLogoutProvider={noopAsync}
         onSetProviderEnabled={noopAsync}
         onSetAllProvidersEnabled={noopAsync}
         onSetAllProvidersDisabled={noopAsync}
         onSetModelEnabled={noopAsync}
-        onStartProviderOAuth={noopAsync}
       />
     )
 
@@ -757,30 +735,24 @@ describe('harness settings surfaces', () => {
     expect(container.querySelector('h1')?.textContent).toBe('General')
     await act(async () => { root.render(renderSettings('agent')); await Promise.resolve() })
     expect(container.querySelector('h1')?.textContent).toBe('Harness')
-    expect(container.querySelector('.settings-nav .is-active')?.textContent).toContain('Harness')
-
-    await click([...container.querySelectorAll<HTMLButtonElement>('.settings-nav button')].find((button) => button.textContent?.includes('General'))!)
-    expect(container.querySelector('h1')?.textContent).toBe('General')
-    await act(async () => { root.render(renderSettings('agent', 1)); await Promise.resolve() })
-    expect(container.querySelector('h1')?.textContent).toBe('Harness')
   })
 
   it('keeps Harness settings universal while leaving only providers harness-specific', async () => {
     const onUpdate = vi.fn()
     const onRefreshHarnesses = vi.fn(async () => undefined)
-    const primeSettings: AppSettings = { ...DEFAULT_SETTINGS, activeHarness: 'prime' }
-    await act(async () => { root.render(<AgentSettings settings={primeSettings} meta={meta} onUpdate={onUpdate} onRefreshHarnesses={onRefreshHarnesses} />) })
+    const initialSettings: AppSettings = { ...DEFAULT_SETTINGS, activeHarness: 'pi' }
+    await act(async () => { root.render(<AgentSettings settings={initialSettings} meta={meta} onUpdate={onUpdate} onRefreshHarnesses={onRefreshHarnesses} />) })
     expect(container.textContent).toContain('Default harness')
     expect(container.textContent).toContain('OMP approval mode')
-    expect(container.textContent).toContain('Prime Agent is ready')
+    expect(container.textContent).toContain('Pi is ready')
     expect(container.textContent).toContain('OMP not detected')
-    expect([...container.querySelectorAll<HTMLSelectElement>('select')[0].options].map((option) => option.textContent)).toEqual(['Prime Work'])
+    expect([...container.querySelectorAll<HTMLSelectElement>('select')[0].options].map((option) => option.textContent)).toEqual(['Pi Work'])
 
     const refresh = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent?.includes('Refresh harnesses'))!
     await click(refresh)
     expect(onRefreshHarnesses).toHaveBeenCalledTimes(1)
 
-    await act(async () => { root.render(<AgentSettings settings={primeSettings} meta={allDetectedMeta} onUpdate={onUpdate} onRefreshHarnesses={onRefreshHarnesses} />) })
+    await act(async () => { root.render(<AgentSettings settings={initialSettings} meta={allDetectedMeta} onUpdate={onUpdate} onRefreshHarnesses={onRefreshHarnesses} />) })
     const harnessSelect = container.querySelector<HTMLSelectElement>('select')!
     await select(harnessSelect!, 'omp')
     expect(onUpdate).toHaveBeenCalledWith({ activeHarness: 'omp' })
@@ -799,7 +771,7 @@ describe('harness settings surfaces', () => {
     ])
     await select(approvalSelect, 'write')
     expect(onUpdate).toHaveBeenCalledWith({ ompApprovalMode: 'write' })
-    expect([...selects[0].options].map((option) => option.textContent)).toEqual(['OMP Work', 'Prime Work', 'Pi Work'])
+    expect([...selects[0].options].map((option) => option.textContent)).toEqual(['OMP Work', 'Pi Work'])
   })
 
   it('renders a harness discovery problem in its runtime card', async () => {
@@ -814,7 +786,7 @@ describe('harness settings surfaces', () => {
     }
 
     await act(async () => {
-      root.render(<AgentSettings settings={{ ...DEFAULT_SETTINGS, activeHarness: 'prime' }} meta={problemMeta} onUpdate={onUpdate} onRefreshHarnesses={onRefreshHarnesses} />)
+      root.render(<AgentSettings settings={{ ...DEFAULT_SETTINGS, activeHarness: 'pi' }} meta={problemMeta} onUpdate={onUpdate} onRefreshHarnesses={onRefreshHarnesses} />)
     })
 
     const piCard = [...container.querySelectorAll('.runtime-card')].find((card) => card.textContent?.includes('Pi not detected'))
@@ -833,7 +805,7 @@ describe('harness settings surfaces', () => {
     }
     const noopAsync = async () => undefined
     await act(async () => {
-      root.render(<ProviderSettings harness="omp" catalog={catalog} onRefresh={noopAsync} onSaveApiKey={noopAsync} onLogout={noopAsync} onSetEnabled={noopAsync} onSetAllEnabled={noopAsync} onSetAllDisabled={noopAsync} onSetModelEnabled={noopAsync} onStartOAuth={noopAsync} onOpenDocs={() => undefined} />)
+      root.render(<ProviderSettings harness="omp" catalog={catalog} onRefresh={noopAsync} onSetEnabled={noopAsync} onSetAllEnabled={noopAsync} onSetAllDisabled={noopAsync} onSetModelEnabled={noopAsync} onOpenDocs={() => undefined} />)
     })
 
     expect(container.textContent).toContain('OMP catalogue')
@@ -859,7 +831,7 @@ describe('harness settings surfaces', () => {
     const noopAsync = async () => undefined
     const onSetEnabled = vi.fn(async () => undefined)
     await act(async () => {
-      root.render(<ProviderSettings harness="pi" catalog={catalog} onRefresh={noopAsync} onSaveApiKey={noopAsync} onLogout={noopAsync} onSetEnabled={onSetEnabled} onSetAllEnabled={noopAsync} onSetAllDisabled={noopAsync} onSetModelEnabled={noopAsync} onStartOAuth={noopAsync} onOpenDocs={() => undefined} />)
+      root.render(<ProviderSettings harness="pi" catalog={catalog} onRefresh={noopAsync} onSetEnabled={onSetEnabled} onSetAllEnabled={noopAsync} onSetAllDisabled={noopAsync} onSetModelEnabled={noopAsync} onOpenDocs={() => undefined} />)
     })
 
     expect(container.textContent).toContain('Pi catalogue')

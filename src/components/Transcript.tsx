@@ -5,7 +5,7 @@ import { ChangesCard } from './ChangesCard'
 import { ErrorBoundary } from './ErrorBoundary'
 import { MarkdownText } from './MarkdownText'
 import { HARNESS_SHORT_NAMES } from '@/lib/harness'
-import { OmpMark, PiMark, PrimeMark } from './ui'
+import { OmpMark, PiMark } from './ui'
 import { ActivityMessage, AgentMessage, AssistantMessage, GoalMessage, SteerReadMarker, UserMessage } from './transcript/messages'
 import { useTranscriptScroll } from './transcript/scroll'
 import { LiveElapsed, ThinkingDots, WorkDisclosure } from './transcript/timeline'
@@ -55,7 +55,7 @@ interface TranscriptProps {
 }
 
 
-const ASSISTANT_MARKS = { omp: OmpMark, prime: PrimeMark, pi: PiMark } satisfies Record<HarnessId, unknown>
+const ASSISTANT_MARKS = { omp: OmpMark, pi: PiMark } satisfies Record<HarnessId, unknown>
 function AssistantMark({ harness, size = 24 }: { harness: HarnessId; size?: number }) {
   const Mark = ASSISTANT_MARKS[harness]
   return <Mark size={size} />
@@ -80,7 +80,7 @@ function ActiveAssistantMessage({ message, harness, showReasoning, showTools }: 
 
 
 
-export function Transcript({ messages, git, harness = 'prime', loading, active = false, showReasoning = true, showTools = true, onOpenChanges, onSuggestion, suggestionsDisabled, showPinnedChanges = true, bottomDockHasChanges = false, queuedMessageCount = 0, onOpenSessionReference }: TranscriptProps) {
+export function Transcript({ messages, git, harness = 'pi', loading, active = false, showReasoning = true, showTools = true, onOpenChanges, onSuggestion, suggestionsDisabled, showPinnedChanges = true, bottomDockHasChanges = false, queuedMessageCount = 0, onOpenSessionReference }: TranscriptProps) {
   const groupedMessages = useMemo(() => coalesceAssistantTurns(messages), [messages])
   const { announcement, hiddenCount, scrollRef, showEarlier, updatePinnedState, visibleMessages } = useTranscriptScroll(groupedMessages)
   const activeAssistantId = useMemo(() => active && groupedMessages.at(-1)?.role === 'assistant' ? groupedMessages.at(-1)?.id : undefined, [active, groupedMessages])
