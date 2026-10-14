@@ -274,9 +274,9 @@ describe('agent RPC command frame bounds', () => {
 
 describe('agent RPC prompt admission capabilities', () => {
   it.each([
-    ['omp', OMP_RPC_ADAPTER, false],
-    ['pi', PI_RPC_ADAPTER, false],
-  ] as const)('keeps or strips streamingBehavior for %s at the wire seam', async (harness, adapter, accepts) => {
+    ['omp', OMP_RPC_ADAPTER],
+    ['pi', PI_RPC_ADAPTER],
+  ] as const)('keeps streamingBehavior for %s at the wire seam', async (harness, adapter) => {
     const cwd = mkdtempSync(join(tmpdir(), `prompt-capability-${harness}-`))
     dirs.push(cwd)
     const executable = join(cwd, 'fake-agent.cjs')
@@ -315,11 +315,10 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     expect(wire).toMatchObject({
       type: 'prompt',
       message: 'admit this prompt',
-      ...(accepts ? { streamingBehavior: 'steer' } : {}),
+      streamingBehavior: 'steer',
       images: [{ type: 'image', mimeType: 'image/png', data: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64') }],
     })
     expect(wire.id).toEqual(expect.any(String))
-    if (!accepts) expect(wire).not.toHaveProperty('streamingBehavior')
   })
 })
 

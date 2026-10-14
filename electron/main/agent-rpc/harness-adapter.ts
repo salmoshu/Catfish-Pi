@@ -93,13 +93,6 @@ export function parseSessionUsage(raw: unknown): SessionUsage | null {
 
 const unsafeArgValue = (value: string): boolean => value.startsWith('-') || /[\r\n]/.test(value)
 
-const stripStreamingBehavior = (command: RpcObject): RpcObject => {
-  if (command.type !== 'prompt' || command.streamingBehavior === undefined) return command
-  // Pi and OMP drop streamingBehavior pending compatibility verification.
-  const { streamingBehavior: _, ...rest } = command
-  return rest
-}
-
 const OMP_UNSUPPORTED_COMMANDS = new Set([
   'send_message', 'clone', 'set_heartbeat', 'update_heartbeat', 'manage_heartbeat', 'observe', 'unobserve',
   'list_heartbeats', 'get_heartbeat', 'agent_messages_status', 'agent_messages_pause', 'agent_messages_resume',
@@ -143,7 +136,7 @@ export const OMP_RPC_ADAPTER: HarnessRpcAdapter = {
     if (OMP_UNSUPPORTED_COMMANDS.has(type)) throw new Error(`RPC command ${type} is not supported by the OMP harness`)
     if (type === 'fork') return { ...command, type: 'branch' }
     if (type === 'get_fork_messages') return { ...command, type: 'get_branch_messages' }
-    return stripStreamingBehavior(command)
+    return command
   },
   normalizeEvent: (event) => {
     if (event.type === 'auto_compaction_start') return { ...event, type: 'compaction_start' }
@@ -210,7 +203,7 @@ export const PI_RPC_ADAPTER: HarnessRpcAdapter = {
     // untranslated) but lacks the daemon/heartbeat family OMP rejects, clone
     // included.
     if (OMP_UNSUPPORTED_COMMANDS.has(type)) throw new Error(`RPC command ${type} is not supported by the Pi harness`)
-    return stripStreamingBehavior(command)
+    return command
   },
   normalizeEvent: (event) => event,
   // Pi has no native tier command. Its prompt RPC invokes the bundled private

@@ -309,7 +309,7 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
       model: { provider: 'openai-codex', id: 'gpt-fixture', name: 'GPT Fixture' },
     } })
   } else if (command.type === 'get_session_stats') {
-    send({ id: command.id, type: 'response', command: command.type, success: true, data: { contextUsage: { tokens: 1000, contextWindow: 200000, percent: 0.5 } } })
+    send({ id: command.id, type: 'response', command: command.type, success: true, data: { contextUsage: { tokens: 12000, contextWindow: 100000, percent: 12 }, cost: 0.42 } })
   } else if (command.type === 'steer') {
     fs.writeFileSync(${JSON.stringify(join(fixtureRoot, 'steer-args.json'))}, JSON.stringify(command))
     setTimeout(() => send({ id: command.id, type: 'response', command: command.type, success: true, data: {} }), 500)
@@ -625,7 +625,7 @@ test.describe('Catfish-Pi desktop smoke', () => {
       return { type: typeof prime, groups: prime ? Object.keys(prime).sort() : [], voiceMethods: voice && typeof voice === 'object' ? Object.keys(voice).sort() : [] }
     })
     expect(bridge.type).toBe('object')
-    expect(bridge.groups).toEqual(['agent', 'app', 'browser', 'git', 'heartbeats', 'pets', 'plugins', 'projects', 'providers', 'schedules', 'sessions', 'settings', 'terminal', 'updates', 'voice'])
+    expect(bridge.groups).toEqual(['agent', 'app', 'browser', 'git', 'pets', 'plugins', 'projects', 'providers', 'schedules', 'sessions', 'settings', 'terminal', 'updates', 'voice'])
     expect(bridge.voiceMethods).toContain('testSelfHosted')
     const updateMenu = await app!.evaluate(({ Menu }) => {
       const parents = Menu.getApplicationMenu()?.items ?? []
@@ -883,6 +883,7 @@ test.describe('Catfish-Pi desktop smoke', () => {
     const voiceModelsAfter = await page.evaluate(async () => JSON.parse((await window.prime.voice.executeTool({ name: 'list_models', arguments: {} }, 'omp')).output) as { models: Array<{ name: string }> })
     expect(voiceModelsAfter.models.map((model) => model.name)).toEqual(['GPT Fixture'])
 
+    await page.getByRole('button', { name: 'Back to session' }).click()
     await page.locator('.session-row__title').filter({ hasText: 'OMP hermetic fixture' }).click()
     const modelPicker = page.locator('.model-picker')
     await modelPicker.locator('.model-picker__trigger').click()
@@ -920,6 +921,7 @@ test.describe('Catfish-Pi desktop smoke', () => {
 
     const voiceModels = await page.evaluate(async () => JSON.parse((await window.prime.voice.executeTool({ name: 'list_models', arguments: {} }, 'omp')).output) as { models: Array<{ name: string }> })
     expect(voiceModels.models.map((model) => model.name)).toEqual(['Claude Fixture'])
+    await page.getByRole('button', { name: 'Back to session' }).click()
     await page.locator('.session-row__title').filter({ hasText: 'OMP hermetic fixture' }).click()
     const modelPicker = page.locator('.model-picker')
     await modelPicker.locator('.model-picker__trigger').click()
@@ -988,6 +990,7 @@ test.describe('Catfish-Pi desktop smoke', () => {
 
     await page.getByRole('button', { name: 'Pi Work — switch harness' }).click()
     await page.getByRole('menuitemradio', { name: /OMP Work/ }).click()
+    await page.getByRole('button', { name: 'Back to session' }).click()
     await page.locator('.session-row__title').filter({ hasText: 'OMP hermetic fixture' }).click()
     await expect(page.locator('.model-picker__trigger')).toHaveAccessibleName('Model: Claude Fixture')
     const composer = page.getByRole('combobox', { name: 'Message OMP' })
@@ -1060,7 +1063,7 @@ test.describe('Catfish-Pi desktop smoke', () => {
     await expect(fixtureActivity).toBeVisible()
     await expect.poll(() => page.evaluate(() => {
       const cleared = JSON.parse(window.localStorage.getItem('prime-work.cleared-activity') ?? '{}') as Record<string, string>
-      return cleared['primary-session']
+      return cleared['019fdf24-eeee-7000-8000-000000000005']
     })).toBeTruthy()
 
     await page.reload()
@@ -1072,7 +1075,7 @@ test.describe('Catfish-Pi desktop smoke', () => {
   })
 
   test('removes archived chats from Activity and clears their notifications', async () => {
-    const primaryFile = join(fixtureSessionFile, '..', 'primary.jsonl')
+    const primaryFile = join(fixtureSessionFile, '..', '..', '--fixtures-project--', '2025-01-01T00-00-00-000Z_019fdf24-eeee-7000-8000-000000000005.jsonl')
     appendFileSync(primaryFile, `${JSON.stringify({
       type: 'message', id: 'primary-archive-failure', parentId: 'primary-message', timestamp: '2027-01-01T00:00:00.000Z',
       message: { role: 'assistant', content: 'Archive this failed work.', stopReason: 'error' },
@@ -1089,7 +1092,7 @@ test.describe('Catfish-Pi desktop smoke', () => {
     await expect(activityCount).toHaveCount(0)
     await expect.poll(() => page.evaluate(() => {
       const cleared = JSON.parse(window.localStorage.getItem('prime-work.cleared-session-attention') ?? '{}') as Record<string, string>
-      return cleared['primary-session']
+      return cleared['019fdf24-eeee-7000-8000-000000000005']
     })).toBeTruthy()
 
     await page.getByRole('button', { name: 'Activity', exact: true }).click()
@@ -1217,6 +1220,7 @@ test.describe('Catfish-Pi desktop smoke', () => {
   })
 
   test('keeps wrapped editing native and aligned through classic scrollbar overflow', async () => {
+    await page.locator('.session-row').filter({ hasText: 'Hermetic desktop fixture' }).click()
     const composer = page.getByRole('combobox', { name: 'Message Pi' })
     await page.addStyleTag({ content: `
       .composer-input > textarea { overflow-y: scroll !important; }
@@ -1429,7 +1433,9 @@ test.describe('Catfish-Pi desktop smoke', () => {
         await expect(addDialog.getByText('Add Package', { exact: true })).toBeVisible()
         await expect(addDialog.getByText('Add Extension', { exact: true })).toBeVisible()
         await expect(addDialog.getByText(/Not every third-party package, plugin, or extension will work in Catfish-Pi/)).toBeVisible()
-        await expect(addDialog.getByRole('button', { name: /Add MCP/ })).toBeEnabled()
+        const addMcp = addDialog.getByRole('button', { name: /Add MCP/ })
+        await expect(addMcp).toBeDisabled()
+        await expect(addMcp).toContainText('Enable Pi MCP Adapter first')
         await addDialog.getByRole('button', { name: 'Close' }).click()
       }
     }
@@ -1438,9 +1444,9 @@ test.describe('Catfish-Pi desktop smoke', () => {
     await page.getByRole('button', { name: 'Providers', exact: true }).click()
     await expect(page.getByLabel('Search providers')).toBeVisible()
     await expect(page.locator('.provider-row')).not.toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Disable all', exact: true })).toBeVisible()
-    await page.getByRole('button', { name: 'Disable all', exact: true }).click()
-    await expect(page.getByRole('button', { name: 'Enable all', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Hide all', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Hide all', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Show all', exact: true })).toBeVisible()
     await expect(page.locator('.provider-row input[type="checkbox"]:checked')).toHaveCount(0)
     await page.getByRole('tab', { name: /Models/ }).click()
     await expect(page.getByLabel('Search models')).toBeVisible()
@@ -1594,7 +1600,7 @@ test.describe('Catfish-Pi desktop smoke', () => {
     const composer = page.getByRole('combobox', { name: 'Message Pi' })
     await composer.fill('/')
     const options = page.locator('.composer-menu').getByRole('option')
-    await expect(options).toHaveCount(5)
+    await expect(options).toHaveCount(4)
     await expect(composer).toHaveAttribute('aria-expanded', 'true')
     await page.keyboard.press('ArrowDown')
     await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true')
@@ -1826,6 +1832,7 @@ test.describe('Catfish-Pi desktop smoke', () => {
   })
 
   test('binds Git to a secondary workspace and clears stale paths during a folder switch', async () => {
+    await page.locator('.session-row').filter({ hasText: 'Hermetic desktop fixture' }).click()
     await page.getByRole('tab', { name: 'Changes' }).click()
     await expect(page.locator('.file-changes')).toContainText('secondary-change.txt')
     await expect(page.getByRole('button', { name: /Stage$/ }).last()).toBeVisible()
@@ -1929,6 +1936,7 @@ test.describe('Catfish-Pi desktop smoke', () => {
   })
 
   test('restores each session terminal without leaking it into another session', async () => {
+    await page.locator('.session-row').filter({ hasText: 'Hermetic desktop fixture' }).click()
     await page.getByLabel(/Toggle terminal/).click()
     const visibleDrawer = page.locator('.terminal-drawer:not([hidden])')
     const input = visibleDrawer.locator('.xterm-helper-textarea')
@@ -1967,6 +1975,7 @@ test.describe('Catfish-Pi desktop smoke', () => {
       return selected.inferred ? window.prime.projects.grantInferred(selected.primaryFolder) : selected
     })
     expect(project).not.toBeNull()
+    await page.locator('.session-row').filter({ hasText: 'Hermetic desktop fixture' }).click()
     await page.getByRole('tab', { name: 'Summary' }).click()
     await page.getByLabel(/Toggle terminal/).click()
     await expect(page.locator('.terminal-drawer .xterm')).toBeVisible()
@@ -2064,8 +2073,8 @@ test.describe('Catfish-Pi desktop smoke', () => {
     const composer = page.getByRole('combobox', { name: 'Message Pi' })
     await composer.fill('Explain the terminal output')
     await composer.press('Enter')
-    await expect.poll(() => existsSync(join(fixtureRoot, 'prompt-args.json'))).toBe(true)
-    const prompt = JSON.parse(readFileSync(join(fixtureRoot, 'prompt-args.json'), 'utf8')) as { message: string }
+    await expect.poll(() => existsSync(join(fixtureRoot, 'pi-prompt-args.json'))).toBe(true)
+    const prompt = JSON.parse(readFileSync(join(fixtureRoot, 'pi-prompt-args.json'), 'utf8')) as { message: string }
     expect(prompt.message).toContain('Explain the terminal output\n\n===== BEGIN TERMINAL SELECTION CONTEXT =====')
     expect(prompt.message).toContain('--- Selected text ---')
     expect(prompt.message).toContain('terminal-selection-marker')

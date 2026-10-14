@@ -125,10 +125,6 @@ beforeEach(() => {
       onPointer: vi.fn(() => () => undefined),
       onActivity: vi.fn(() => () => undefined),
     },
-    heartbeats: {
-      list: vi.fn(async () => []),
-      manage: vi.fn(async () => true),
-    },
     schedules: {
       list: vi.fn(async () => []),
       create: vi.fn(async () => undefined),
