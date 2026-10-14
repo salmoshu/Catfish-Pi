@@ -1855,7 +1855,7 @@ test.describe('Catfish-Pi desktop smoke', () => {
     await popupToggle.press('Space')
     await expect(popupToggle).not.toBeChecked()
     await expect.poll(() => page.evaluate(async () => (await window.prime.settings.get()).showFileChangesPopup)).toBe(false)
-    await page.locator('.session-row-wrap').filter({ hasText: 'Hermetic desktop fixture' }).locator('.session-row').click()
+    await page.getByRole('button', { name: 'Back to session' }).click()
     await expect(page.locator('.changes-card')).toHaveCount(0)
 
     await page.getByRole('tab', { name: 'Changes' }).click()
