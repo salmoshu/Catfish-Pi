@@ -927,7 +927,7 @@ describe('post-package verification helpers', () => {
 
   test('keeps every platform native unpack allowlist exact and architecture-specific', () => {
     const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
-    expect(packageJson.author).toEqual({ name: 'Catfish-Pi contributors' })
+    expect(packageJson.author).toEqual({ name: 'Catfish-Pi contributors', email: 'salmoshu@users.noreply.github.com' })
     expect(packageJson.description).toBe('A desktop workspace for Pi and OMP (forked from GooeyPi)')
     expect(packageJson.homepage).toBe('https://github.com/salmoshu/Catfish-Pi')
     expect(packageJson.build.productName).toBe('Catfish-Pi')
