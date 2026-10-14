@@ -3,6 +3,11 @@ blockExoticSubdeps: true
 allowBuilds:
   electron: true
   node-pty: true
+  # Reviewed: binaries ship via platform optional deps; postinstalls are no-op validation or telemetry.
+  '@google/genai': false
+  electron-winstaller: false
+  esbuild: false
+  protobufjs: false
 overrides:
   '@earendil-works/pi-ai': file:vendor/prime-agent-ai-0.7.0-gooeypi.1.tgz
   extract-zip: npm:@electron-internal/extract-zip@1.0.5
