@@ -6,7 +6,8 @@
   "main": "out/main/index.js",
   "desktopName": "catfish-pi.desktop",
   "author": {
-    "name": "Catfish-Pi contributors"
+    "name": "Catfish-Pi contributors",
+    "email": "salmoshu@users.noreply.github.com"
   },
   "homepage": "https://github.com/salmoshu/Catfish-Pi",
   "license": "MIT",

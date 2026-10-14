@@ -221,10 +221,10 @@ jobs:
             ~/.cache/electron
             ~/.cache/electron-builder
           key: electron-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
-      - name: Install pacman packaging dependency
+      - name: Install pacman and rpm packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes libarchive-tools
+          sudo apt-get install --yes libarchive-tools rpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run release:preflight:toolchain
       - run: pnpm run package:linux -- --skip-verify --arch ${{ matrix.arch }}
