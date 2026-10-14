@@ -41,8 +41,16 @@ import {
   releaseAssetNames,
 } from '../scripts/release/prepare-github-release.mjs'
 import { parseDraftAssetNames, staleDraftReleaseAssets } from '../scripts/release/prune-draft-release-assets.mjs'
-import { assertBundleSizeBudgets, assertPackageSizeBudgets, BUNDLE_SIZE_BUDGETS, collectBundleSizeMetrics, collectPackageSizeMetrics, PACKAGE_SIZE_BUDGETS } from '../scripts/release/size-budgets.mjs'
-import { assertReleaseTag } from '../scripts/release/validate-release-tag.mjs'
+import {
+  assertBundleSizeBudgets,
+  assertPackageSizeBudgets,
+  BUNDLE_SIZE_BUDGETS,
+  collectBundleSizeMetrics,
+  collectPackageSizeMetrics,
+  describeSizeMetrics,
+  PACKAGE_SIZE_BUDGETS,
+} from '../scripts/release/size-budgets.mjs'
+import { assertReleaseTag, invokedAsScript, validateReleaseTag } from '../scripts/release/validate-release-tag.mjs'
 // after-pack.cjs is CommonJS; the interop layer exposes module.exports properties as named exports.
 import { executablePath } from '../scripts/release/after-pack.cjs'
 import { collectAuditAdvisories, describeAuditEvaluation, evaluateAuditReport, parseAuditExceptions, readAuditExceptions } from '../scripts/release/audit-exceptions.mjs'
@@ -765,6 +773,18 @@ describe('GitHub Release publication', () => {
     expect(() => assertReleaseTag('v01.2.3', '01.2.3')).toThrow(/not a supported semantic version/)
   })
 
+  test('validates the tag against a fixture package.json and detects script invocation', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'catfishpi-release-tag-'))
+    try {
+      writeFileSync(join(directory, 'package.json'), JSON.stringify({ version: '0.2.0' }))
+      expect(validateReleaseTag('v0.2.0', directory)).toEqual({ tag: 'v0.2.0', version: '0.2.0' })
+      expect(() => validateReleaseTag('v0.3.0', directory)).toThrow(/must exactly match/)
+      expect(invokedAsScript()).toBe(false)
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
   test('selects the exact cross-platform asset set and writes reproducible checksums', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'catfishpi-github-release-'))
     const projectDirectory = join(directory, 'project')
@@ -1253,6 +1273,22 @@ describe('release size budgets', () => {
         rendererJsCssBytes: 418,
       })
       expect(() => assertBundleSizeBudgets(metrics)).not.toThrow()
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  test('describes size metrics in a deterministic human-readable format', () => {
+    expect(describeSizeMetrics({ mainBytes: 1048576, preloadBytes: 512 })).toBe('mainBytes=1048576 bytes (1.00 MiB), preloadBytes=512 bytes (0.00 MiB)')
+  })
+
+  test('rejects renderer index references that are invalid or escape the renderer output', () => {
+    const directory = createBundleSizeFixture()
+    try {
+      writeFileSync(join(directory, 'renderer/index.html'), '<script type="module" src="https://example.invalid/entry.js"></script>')
+      expect(() => collectBundleSizeMetrics(directory)).toThrow(/invalid initial asset reference/)
+      writeFileSync(join(directory, 'renderer/index.html'), '<script type="module" src="../outside.js"></script>')
+      expect(() => collectBundleSizeMetrics(directory)).toThrow(/escapes the renderer output/)
     } finally {
       rmSync(directory, { recursive: true, force: true })
     }
