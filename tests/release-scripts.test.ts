@@ -53,7 +53,6 @@ import {
   expectedAuthenticodeSigner,
   expectedNativeFiles,
   nativeRuntimeDirectory,
-  zeroMqAddonPattern,
 } from '../scripts/release/verify-cross-platform-package.mjs'
 
 // js-yaml ships no type declarations, so it is required rather than imported.
@@ -69,18 +68,9 @@ const baseEnvironment = {
   APPLE_TEAM_ID: 'TEAM123',
 }
 
-const FIXTURE_ZEROMQ_DIRECTORIES = new Map([
-  ['arm64', 'arm64'],
-  ['x86_64', 'x64'],
-])
-
-function fixtureAddonPath(architecture: string, runtime = 'libc-115-Release') {
-  return `node_modules/zeromq/build/darwin/${FIXTURE_ZEROMQ_DIRECTORIES.get(architecture)}/node/${runtime}/addon.node`
-}
-
 function createUnpackedFixture(architectures = new Set(['arm64'])) {
   const directory = mkdtempSync(join(tmpdir(), 'prime-work-unpacked-'))
-  const relativePaths = [...expectedUnpackedNativeLayout(architectures).files, ...[...architectures].map((architecture) => fixtureAddonPath(architecture))]
+  const relativePaths = expectedUnpackedNativeLayout(architectures).files
   for (const relativePath of relativePaths) {
     const path = join(directory, relativePath)
     mkdirSync(dirname(path), { recursive: true })
@@ -582,7 +572,7 @@ describe('release preflight', () => {
   test('ships both mac architectures as separate builds from native-arch runners', () => {
     const releaseWorkflow = readFileSync('.github/workflows/release.yml', 'utf8')
     // Two matrix legs, each on a runner whose native architecture matches the
-    // target (arm64 on macos-15, x64 on macos-15-intel) so node-pty/zeromq never
+    // target (arm64 on macos-15, x64 on macos-15-intel) so node-pty never
     // cross-compile, and one leg's failure never cancels the other's build.
     expect(releaseWorkflow).toContain('fail-fast: false')
     expect(releaseWorkflow).toMatch(/- arch: arm64\n {12}runner: macos-15/)
@@ -910,15 +900,7 @@ describe('post-package verification helpers', () => {
   })
 
   test('requires the ASAR and rejects duplicated renderer dependencies', () => {
-    const entries = [
-      '/out/main/index.js',
-      '/out/preload/index.js',
-      '/out/renderer/index.html',
-      '/node_modules/node-pty/lib/index.js',
-      '/node_modules/@earendil-works/pi-ai/dist/index.js',
-      '/node_modules/zeromq/lib/index.js',
-      '/node_modules/zeromq/build/manifest.json',
-    ]
+    const entries = ['/out/main/index.js', '/out/preload/index.js', '/out/renderer/index.html', '/node_modules/node-pty/lib/index.js', '/node_modules/@earendil-works/pi-ai/dist/index.js']
     expect(() => assertAsarLayout(entries)).not.toThrow()
     expect(() => assertAsarLayout([...entries, '/node_modules/react/index.js'])).toThrow(/duplicated/)
     expect(() => assertAsarLayout(entries.filter((entry) => !entry.includes('node-pty')))).toThrow(/missing required/)
@@ -1043,32 +1025,6 @@ describe('post-package verification helpers', () => {
     expect(packageJson.build.win.files).toEqual(['out/**/*', 'package.json', '!**/node_modules/extract-zip/index.darwin-*.node', '!**/node_modules/extract-zip/index.linux-*.node'])
   })
 
-  test('accepts bounded ZeroMQ ABI fallbacks per architecture', () => {
-    const architectures = new Set(['arm64'])
-    const fallbackDirectory = createUnpackedFixture(architectures)
-    const fallback = join(fallbackDirectory, fixtureAddonPath('arm64', 'libc-999-Release'))
-    mkdirSync(dirname(fallback), { recursive: true })
-    writeFileSync(fallback, 'fixture')
-    try {
-      expect(() => assertUnpackedNativeLayout(fallbackDirectory, architectures, () => architectures)).not.toThrow()
-    } finally {
-      rmSync(fallbackDirectory, { recursive: true, force: true })
-    }
-
-    const futureDirectory = mkdtempSync(join(tmpdir(), 'prime-work-unpacked-'))
-    for (const relativePath of [...expectedUnpackedNativeLayout(architectures).files, fixtureAddonPath('arm64', 'libc-999-Release')]) {
-      const path = join(futureDirectory, relativePath)
-      mkdirSync(dirname(path), { recursive: true })
-      writeFileSync(path, 'fixture')
-    }
-    try {
-      // A future runtime-library name still matches the bounded wildcard.
-      expect(() => assertUnpackedNativeLayout(futureDirectory, architectures, () => architectures)).not.toThrow()
-    } finally {
-      rmSync(futureDirectory, { recursive: true, force: true })
-    }
-  })
-
   test('accepts the exact unpacked native fixture with complete architecture coverage', () => {
     const architectures = new Set(['arm64'])
     const directory = createUnpackedFixture(architectures)
@@ -1112,8 +1068,8 @@ describe('post-package verification helpers', () => {
     const architectures = new Set(['arm64'])
     const directory = createUnpackedFixture(architectures)
     try {
-      expect(() => assertUnpackedNativeLayout(directory, architectures, (path: string) => (path.endsWith('addon.node') ? new Set(['x86_64']) : new Set(['arm64'])))).toThrow(
-        /addon\.node is missing app architecture.*arm64/,
+      expect(() => assertUnpackedNativeLayout(directory, architectures, (path: string) => (path.endsWith('pty.node') ? new Set(['x86_64']) : new Set(['arm64'])))).toThrow(
+        /pty.node is missing app architecture.*arm64/,
       )
     } finally {
       rmSync(directory, { recursive: true, force: true })
@@ -1191,29 +1147,24 @@ describe('cross-platform packaging repair', () => {
       for (const file of expectedNativeFiles(target, architecture)) {
         expect(globs, `verifier requires ${file} but no ${target} asarUnpack glob produces it`).toContain(file)
       }
-      const sampleAddon = `node_modules/zeromq/build/${nativeRuntimeDirectory(target)}/${architecture}/node/glibc-x64-115-Release/addon.node`
-      expect(zeroMqAddonPattern(target, architecture).test(sampleAddon)).toBe(true)
     }
     expect(nativeRuntimeDirectory('win')).toBe('win32')
     expect(nativeRuntimeDirectory('linux')).toBe('linux')
   })
 
-  test('accepts ZeroMQ ABI and libc fallbacks only within the target architecture', () => {
+  test('accepts only the exact cross-platform native allowlist', () => {
     const directory = mkdtempSync(join(tmpdir(), 'prime-work-cross-platform-unpacked-'))
-    const nativeFiles = [
-      ...expectedNativeFiles('linux', 'x64'),
-      'node_modules/zeromq/build/linux/x64/node/glibc-127-Release/addon.node',
-      'node_modules/zeromq/build/linux/x64/node/musl-127-Release/addon.node',
-    ]
-    for (const relativePath of nativeFiles) {
+    for (const relativePath of expectedNativeFiles('linux', 'x64')) {
       const path = join(directory, relativePath)
       mkdirSync(dirname(path), { recursive: true })
       writeFileSync(path, 'fixture')
     }
+    const extra = join(directory, 'node_modules/extra/build/Release/addon.node')
     try {
       expect(() => assertCrossPlatformUnpackedNativeLayout(directory, 'linux', 'x64')).not.toThrow()
-      rmSync(join(directory, 'node_modules/zeromq'), { recursive: true, force: true })
-      expect(() => assertCrossPlatformUnpackedNativeLayout(directory, 'linux', 'x64')).toThrow(/expected at least 1/)
+      mkdirSync(dirname(extra), { recursive: true })
+      writeFileSync(extra, 'fixture')
+      expect(() => assertCrossPlatformUnpackedNativeLayout(directory, 'linux', 'x64')).toThrow(/extra:/)
     } finally {
       rmSync(directory, { recursive: true, force: true })
     }
